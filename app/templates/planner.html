@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Event Floor Planner</title>
+
+    <!-- Bootstrap / FontAwesome -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/bootstrap.min.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/all.min.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css', v='20260906-builder-reference-modal-v110') }}" />
+    <script src="{{ url_for('static', filename='vendor/konva/konva.min.js') }}"></script>
+  </head>
+
+  <body>
+    <script>
+      window.floorplannerBoot = {{ (planner_context or {}) | tojson }};
+    </script>
+    <!-- Toolbar -->
+    <div id="toolbar" class="d-flex align-items-center">
+      <div id="plannerMeta" class="d-flex align-items-center">
+        <div class="dropdown me-2">
+          <button id="plannerFileMenuBtn" class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Planner File Menu">
+            <i class="fa-regular fa-file-lines"></i>
+          </button>
+          <ul class="dropdown-menu" id="plannerFileMenu">
+            <li><button id="newPlannerMenuItem" class="dropdown-item" type="button">New planner</button></li>
+            <li><button id="openPlannerMenuItem" class="dropdown-item" type="button">Open planner</button></li>
+            <li><button id="savePlannerMenuItem" class="dropdown-item" type="button">Save planner</button></li>
+            <li><button id="importPlannerMenuItem" class="dropdown-item" type="button">Import JSON</button></li>
+            <li><button id="exportPlannerMenuItem" class="dropdown-item" type="button">Export JSON</button></li>
+            <li><hr class="dropdown-divider" /></li>
+            <li><button id="renamePlannerMenuItem" class="dropdown-item" type="button">Rename planner</button></li>
+            <li><button id="printPlannerMenuItem" class="dropdown-item" type="button">Print planner</button></li>
+            <li><button id="settingsMenuItem" class="dropdown-item" type="button"><i class="fa-solid fa-sliders me-2"></i>Settings</button></li>
+          </ul>
+        </div>
+        <div>
+          <div id="plannerTitle">Untitled planner</div>
+        </div>
+      </div>
+
+      <button id="selectBtn" class="btn btn-outline-secondary btn-sm me-1" data-bs-toggle="tooltip" title="Select / Move">
+        <i class="fa-solid fa-arrow-pointer"></i>
+      </button>
+      <button id="panBtn" class="btn btn-outline-secondary btn-sm me-1" data-bs-toggle="tooltip" title="Pan View">
+        <i class="fa-solid fa-hand"></i>
+      </button>
+      <span class="toolbar-divider" aria-hidden="true">|</span>
+      <button id="undoBtn" class="btn btn-outline-secondary btn-sm me-1" title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button>
+      <button id="redoBtn" class="btn btn-outline-secondary btn-sm me-1" title="Redo (Ctrl+Shift+Z)"><i class="fa-solid fa-rotate-right"></i></button>
+      <button id="copyBtn" class="btn btn-outline-secondary btn-sm me-1" title="Copy">
+        <i class="fa-regular fa-copy"></i>
+      </button>
+      <button id="pasteBtn" class="btn btn-outline-secondary btn-sm me-1" title="Paste">
+        <i class="fa-regular fa-paste"></i>
+      </button>
+      <button id="deleteBtn" class="btn btn-outline-secondary btn-sm me-1" title="Delete">
+        <i class="fa-regular fa-trash-can"></i>
+      </button>
+      <span class="toolbar-divider" aria-hidden="true">|</span>
+      <button id="saveGroupBtn" class="btn btn-outline-secondary btn-sm me-1" title="Save selected items as a reusable layout group">
+        <i class="fa-solid fa-bookmark"></i>
+      </button>
+      <button id="ungroupBtn" class="btn btn-outline-secondary btn-sm me-1" title="Ungroup selected layout">
+        <i class="fa-solid fa-object-ungroup"></i>
+      </button>
+      <span class="toolbar-divider" aria-hidden="true">|</span>
+      <button id="labelToolBtn" class="btn btn-outline-secondary btn-sm me-1" title="Add Label">
+        <i class="fa-solid fa-font"></i>
+      </button>
+      <span class="toolbar-divider" aria-hidden="true">|</span>
+      <button id="venueToggleBtn" class="btn btn-outline-secondary btn-sm me-1" title="Enable Venue Editing">
+        <i class="fa-solid fa-tent"></i>
+      </button>
+      <button id="labelsToggleBtn" class="btn btn-outline-secondary btn-sm me-1" title="Show or Hide Labels">
+        <i class="fa-solid fa-tag"></i>
+      </button>
+      <button id="inventoryKeyBtn" class="btn btn-outline-secondary btn-sm me-1" title="Inventory Key">
+        <i class="fa-solid fa-list-check"></i>
+      </button>
+      <button id="layersBtn" class="btn btn-outline-secondary btn-sm me-1" title="Layers">
+        <i class="fa-solid fa-layer-group"></i>
+      </button>
+      <span class="toolbar-divider" aria-hidden="true">|</span>
+      <button id="snapToolbarBtn" class="btn btn-outline-secondary btn-sm" title="Toggle Snap">
+        <i class="fa-solid fa-magnet"></i>
+      </button>
+
+      <input type="file" id="importInput" accept="application/json" style="display:none;" />
+      <input type="file" id="referenceImageInput" accept="image/png,image/jpeg,application/pdf,.pdf" style="display:none;" />
+      <a id="downloadAnchor" style="display:none;"></a>
+    </div>
+
+    <div id="leftSidebar">
+      <div id="sidePanelTabs" class="side-panel-tabs" role="tablist" aria-label="Planner library">
+        <button id="inventoryPanelTab" class="btn btn-outline-secondary btn-sm is-active" type="button" role="tab" aria-controls="inventoryPanel" aria-selected="true" aria-expanded="false"><i class="fa-solid fa-boxes-stacked"></i> Inventory</button>
+        <button id="venuesPanelTab" class="btn btn-outline-secondary btn-sm" type="button" role="tab" aria-controls="venuesPanel" aria-selected="false" aria-expanded="false"><i class="fa-solid fa-tent"></i> Venues</button>
+      </div>
+      <!-- Inventory Panel -->
+      <div id="inventoryPanel" class="minimizable-panel is-side-panel-active" data-panel-key="inventory">
+        <div class="panel-window-header">
+          <h6 class="mb-0">Inventory</h6>
+          <button class="btn btn-outline-secondary panel-minimize-btn" type="button" data-panel-toggle="inventoryPanel" title="Collapse Inventory" aria-expanded="true">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div class="panel-window-body">
+          <label class="inventory-search" for="inventorySearch">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input id="inventorySearch" class="form-control" type="search" placeholder="Search inventory" autocomplete="off" />
+          </label>
+          <div id="inventorySections"></div>
+          <details id="customInventorySection">
+            <summary>My Inventory</summary>
+            <div class="d-grid gap-2 mt-2">
+              <button id="buildInventoryItemBtn" class="btn btn-primary btn-sm" type="button">Build Custom Item</button>
+              <div class="d-flex gap-1"><button id="exportCustomDataBtn" class="btn btn-outline-secondary btn-sm flex-grow-1" type="button">Export</button><button id="importCustomDataBtn" class="btn btn-outline-secondary btn-sm flex-grow-1" type="button">Import</button><input id="importCustomDataInput" type="file" accept="application/json,.json" hidden /></div>
+              <div id="customInventoryList" class="custom-list"></div>
+            </div>
+          </details>
+          <details data-flooring-section>
+            <summary>Flooring</summary>
+            <div class="flooring-controls"></div>
+          </details>
+          <details id="groupedSeatingSection">
+            <summary>Grouped Seating</summary>
+            <div class="grouped-seating-controls">
+              <details class="grouped-seating-card">
+                <summary class="grouped-seating-title">Chair Rows</summary>
+                <div class="grouped-seating-grid">
+                  <label class="grouped-seating-field">
+                    <span>Mode</span>
+                    <select id="chairRowsMode" class="form-select form-select-sm"><option value="free">Free</option><option value="total">Total</option></select>
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Chair type</span>
+                    <select id="chairRowsChairType" class="form-select form-select-sm"></select>
+                  </label>
+                  <label class="grouped-seating-field" id="chairRowsTotalField">
+                    <span>Total chairs</span>
+                    <input id="chairRowsTotal" class="form-control form-control-sm" type="number" min="1" value="40" />
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Rows</span>
+                    <input id="chairRowsCountRows" class="form-control form-control-sm" type="number" min="1" value="5" />
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Chairs per row</span>
+                    <input id="chairRowsCountCols" class="form-control form-control-sm" type="number" min="1" value="8" />
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Chair spacing ft</span>
+                    <input id="chairRowsSeatSpacing" class="form-control form-control-sm" type="number" min="0" step="0.25" value="0.5" />
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Row spacing ft</span>
+                    <input id="chairRowsRowSpacing" class="form-control form-control-sm" type="number" min="0" step="0.25" value="1" />
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Facing</span>
+                    <select id="chairRowsFacing" class="form-select form-select-sm"><option value="up">Up</option><option value="down">Down</option><option value="left">Left</option><option value="right">Right</option></select>
+                  </label>
+                  <button id="chairRowsPlaceBtn" class="btn btn-outline-secondary btn-sm" type="button">Place Rows</button>
+                  <div class="chair-rows-aisle-controls">
+                    <label class="grouped-seating-field">
+                      <span>Aisle ft</span>
+                      <input id="chairRowsAisleDistance" class="form-control form-control-sm" type="number" min="2" max="20" step="1" value="4" />
+                    </label>
+                    <label class="grouped-seating-field">
+                      <span>Direction</span>
+                      <select id="chairRowsAisleDirection" class="form-select form-select-sm"><option value="vertical">Vertical</option><option value="horizontal">Horizontal</option></select>
+                    </label>
+                    <button id="chairRowsAddAisleBtn" class="btn btn-outline-secondary btn-sm" type="button">+ Aisle</button>
+                  </div>
+                </div>
+              </details>
+              <details class="grouped-seating-card">
+                <summary class="grouped-seating-title">Table Seating</summary>
+                <div class="grouped-seating-grid">
+                  <label class="grouped-seating-field">
+                    <span>Table type</span>
+                    <select id="tableSeatingTableType" class="form-select form-select-sm"></select>
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Chair type</span>
+                    <select id="tableSeatingChairType" class="form-select form-select-sm"></select>
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Chair count</span>
+                    <input id="tableSeatingChairCount" class="form-control form-control-sm" type="number" min="0" value="8" />
+                  </label>
+                  <label class="grouped-seating-field">
+                    <span>Chair clearance ft</span>
+                    <input id="tableSeatingClearance" class="form-control form-control-sm" type="number" min="0.25" step="0.25" value="0.25" />
+                  </label>
+                  <label id="cocktailHeightModeField" class="grouped-seating-field" style="display:none;">
+                    <span>Cocktail height</span>
+                    <div id="cocktailHeightModeToggle" class="planner-toggle-group">
+                      <button class="btn btn-outline-secondary btn-sm is-active" type="button" data-value="H">H</button>
+                      <button class="btn btn-outline-secondary btn-sm" type="button" data-value="L">L</button>
+                    </div>
+                  </label>
+                  <label id="tableChairPatternField" class="grouped-seating-field">
+                    <span>Chair pattern</span>
+                    <div id="tableChairPatternToggle" class="planner-toggle-group">
+                      <button class="btn btn-outline-secondary btn-sm" type="button" data-value="across">Across</button>
+                      <button class="btn btn-outline-secondary btn-sm is-active" type="button" data-value="side_by_side">Side by side</button>
+                    </div>
+                  </label>
+                  <div id="tableSeatingCapacity" class="grouped-seating-capacity">Max: --</div>
+                  <button id="tableSeatingPlaceBtn" class="btn btn-outline-secondary btn-sm" type="button">Place Table Set</button>
+                </div>
+              </details>
+            </div>
+          </details>
+          <details id="layoutGroupsSection">
+            <summary>My Layout Groups</summary>
+            <div id="layoutGroupsList" class="layout-groups-list"></div>
+          </details>
+        </div>
+      </div>
+
+      <!-- Venues Panel -->
+      <div id="venuesPanel" class="minimizable-panel" data-panel-key="venues">
+        <div class="panel-window-header">
+          <h6 class="mb-0">Venues</h6>
+          <button class="btn btn-outline-secondary panel-minimize-btn" type="button" data-panel-toggle="venuesPanel" title="Collapse Venues" aria-expanded="true">
+            <i class="fa-solid fa-chevron-up"></i>
+          </button>
+        </div>
+        <div class="panel-window-body">
+          <details id="indoorRoomsSection">
+            <summary>Indoor Rooms</summary>
+            <div class="btn-group-vertical" id="indoorRoomsList">
+              <!-- Buttons for 10x10, 10x20, etc. will be inserted dynamically by JS -->
+            </div>
+            <div class="small fw-semibold mt-2">Wall attachments</div>
+            <div class="d-flex gap-1 mt-1" id="roomWallAttachmentTools">
+              <button id="roomDoorTool" class="btn btn-outline-success btn-sm flex-grow-1" type="button" title="Place a hinged door"><i class="fa-solid fa-door-open"></i> Door</button>
+              <button id="roomOpeningTool" class="btn btn-outline-warning btn-sm flex-grow-1" type="button" title="Place an open wall opening"><i class="fa-solid fa-right-left"></i> Opening</button>
+            </div>
+          </details>
+
+          <details id="tentsSection">
+            <summary>Tents</summary>
+            <div class="btn-group-vertical" id="tentsList">
+              <!-- Buttons for 10x10 Tent, 15x30 Tent, etc. will be inserted dynamically by JS -->
+            </div>
+          </details>
+          <details id="tentAddonsVenueSection">
+            <summary>Tent Add-ons</summary>
+            <div class="btn-group-vertical" id="tentAddonsVenueList"></div>
+          </details>
+          <details id="customVenuesSection">
+            <summary>My Venues</summary>
+            <div class="d-grid gap-2 mt-2">
+              <button id="buildVenueBtn" class="btn btn-primary btn-sm" type="button"><i class="fa-solid fa-draw-polygon"></i> Build Venue</button>
+              <div class="d-flex gap-1"><button id="exportCustomVenuesBtn" class="btn btn-outline-secondary btn-sm flex-grow-1" type="button">Export</button><button id="importCustomVenuesBtn" class="btn btn-outline-secondary btn-sm flex-grow-1" type="button">Import</button><input id="importCustomVenuesInput" type="file" accept="application/json,.json" hidden /></div>
+              <div class="custom-list" id="customVenuesList"></div>
+            </div>
+          </details>
+        </div>
+      </div>
+
+      <div id="roomAttachmentPopup" class="room-attachment-popup" role="dialog" aria-label="Wall attachment editor" style="display:none;">
+        <div class="d-flex align-items-center justify-content-between gap-2 mb-1"><strong>Wall attachment</strong><button id="roomAttachmentClose" class="btn btn-sm btn-outline-secondary" type="button" title="Close">×</button></div>
+        <label class="small">Width (ft)<input id="roomAttachmentWidth" class="form-control form-control-sm" type="number" min="0.25" step="0.25"></label>
+        <div class="d-flex gap-1 mt-2"><button id="roomAttachmentSwing" class="btn btn-outline-success btn-sm flex-grow-1" type="button">Flip swing</button><button id="roomAttachmentDelete" class="btn btn-outline-danger btn-sm" type="button" title="Delete"><i class="fa-solid fa-trash"></i></button></div>
+      </div>
+    </div>
+
+    <div id="venueBuilderPanel" class="venue-builder-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Venue builder">
+      <div class="venue-builder-dialog">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <div><h5 id="venueBuilderTitle" class="mb-0">Build Venue</h5><div class="small text-muted">Draw and edit your venue without leaving the planner.</div></div>
+          <button id="venueBuilderClose" class="btn btn-outline-secondary btn-sm" type="button">Close</button>
+        </div>
+        <div class="venue-builder-layout">
+          <div>
+            <div id="venueBuilderCanvas" class="venue-builder-canvas"></div>
+            <div id="venueBuilderGridHint" class="small text-muted mt-1">Grid: 5′ × 5′</div>
+          </div>
+          <div class="venue-builder-controls">
+        <label class="form-label small">Name<input id="venueBuilderName" class="form-control form-control-sm" placeholder="e.g. Custom item" /></label>
+        <div id="customItemBuilderOptions" style="display:none;"><label class="form-label small">Height (ft)<input id="customItemHeight" class="form-control form-control-sm" type="number" min="0.1" step="0.1" value="1" /></label><div class="custom-item-toggle-row"><label class="form-check form-switch small"><input id="customItemHanging" class="form-check-input" type="checkbox" /><span class="form-check-label">Hanging</span></label><label class="form-check form-switch small"><input id="customItemSnap" class="form-check-input" type="checkbox" checked /><span class="form-check-label">Snap</span></label></div></div>
+        <label id="venueBuilderSnapOption" class="form-check form-switch small" style="display:none;"><input id="venueBuilderSnap" class="form-check-input" type="checkbox" checked /><span class="form-check-label">Snap</span></label>
+        <div id="venueBuilderDrawLabel" class="small fw-semibold mt-2">Draw a shape</div>
+        <div class="venue-builder-actions mt-1">
+          <button id="venueBuilderSelect" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-arrow-pointer"></i> Select / move</button>
+          <button id="venueBuilderRectangle" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-regular fa-square"></i> Rectangle</button>
+          <button id="venueBuilderCircle" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-regular fa-circle"></i> Circle</button>
+          <button id="venueBuilderArc" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-circle-notch"></i> Arc / open circle</button>
+          <button id="venueBuilderLine" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-minus"></i> Line</button>
+          <button id="venueBuilderTrace" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-draw-polygon"></i> Polygon</button>
+        </div>
+        <div id="venueBuilderVenueControls">
+          <div id="venueBuilderVenueControlsTitle" class="small fw-semibold mt-3">Doors and openings</div>
+          <div class="venue-builder-actions mt-1">
+            <button id="venueBuilderDoor" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-door-open"></i> Door</button>
+            <button id="venueBuilderOpening" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-right-left"></i> Opening</button>
+            <button id="venueBuilderDeleteWall" class="btn btn-outline-danger btn-sm" type="button"><i class="fa-solid fa-eraser"></i> Delete wall</button>
+            <button id="venueBuilderEraser" class="btn btn-outline-danger btn-sm" type="button"><i class="fa-solid fa-trash-can"></i> Eraser</button>
+          </div>
+        </div>
+        <div class="small fw-semibold mt-3">View</div>
+        <div class="venue-builder-actions mt-1">
+          <button id="venueBuilderPan" class="btn btn-outline-secondary btn-sm" type="button"><i class="fa-solid fa-hand"></i> Pan canvas</button>
+          <button id="venueBuilderZoomIn" class="btn btn-outline-secondary btn-sm" type="button"><i class="fa-solid fa-magnifying-glass-plus"></i> Zoom in</button>
+          <button id="venueBuilderResetView" class="btn btn-outline-secondary btn-sm" type="button">Reset view</button>
+          <button id="venueBuilderZoomOut" class="btn btn-outline-secondary btn-sm" type="button"><i class="fa-solid fa-magnifying-glass-minus"></i> Zoom out</button>
+        </div>
+        <div id="venueBuilderHint" class="small text-muted mt-2">Choose a shape, then click two points on the canvas. Drag blue points to refine it.</div>
+        <div id="venueBuilderDimensionEditor" class="mt-2 p-2 border rounded" style="display:none;">
+          <label id="venueBuilderDimensionLabel" class="form-label small mb-1">Dimension (ft)</label>
+          <div class="input-group input-group-sm"><input id="venueBuilderDimensionInput" class="form-control" type="number" min="0.01" step="0.01" /><button id="venueBuilderDimensionApply" class="btn btn-primary" type="button">Apply</button><button id="venueBuilderDimensionCancel" class="btn btn-outline-secondary" type="button">Cancel</button></div>
+        </div>
+        <div class="venue-builder-actions mt-2">
+          <button id="venueBuilderUndo" class="btn btn-outline-secondary btn-sm" type="button">Undo</button>
+          <button id="venueBuilderClear" class="btn btn-outline-secondary btn-sm" type="button">Clear</button>
+          <button id="venueBuilderSave" class="btn btn-success btn-sm" type="button">Save venue</button>
+        </div>
+        <div id="venueBuilderPoints" class="small text-muted mt-2">0 points</div>
+        <details class="mt-3">
+          <summary class="small">Optional reference image</summary>
+          <label class="form-label small mt-2">Image or PDF<input id="venueBuilderImage" class="form-control form-control-sm" type="file" accept="image/png,image/jpeg,application/pdf,.pdf" /></label>
+          <div id="venueBuilderImageStatus" class="small text-muted mt-1">Use an image only when you need to trace an existing plan.</div>
+          <div id="venueBuilderReferenceControls" class="mt-2" style="display:none;"><label class="form-label small">Opacity <input id="venueBuilderImageOpacity" class="form-range" type="range" min="0.1" max="1" step="0.05" value="0.5" /></label><button id="venueBuilderReferenceSetup" class="btn btn-outline-secondary btn-sm" type="button"><i class="fa-solid fa-crop-simple"></i> Edit frame / scale</button></div>
+        </details>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nav Controls -->
+    <div id="navControls" class="nav-panel" aria-label="Canvas view controls">
+      <div class="nav-grid">
+        <button id="zoomIn" class="btn btn-outline-secondary btn-sm">＋</button>
+        <button id="panUp" class="btn btn-outline-secondary btn-sm">↑</button>
+        <button id="rotateRight" class="btn btn-outline-secondary btn-sm">⟳</button>
+        <button id="panLeft" class="btn btn-outline-secondary btn-sm">←</button>
+        <button id="resetView" class="btn btn-outline-secondary btn-sm">◎</button>
+        <button id="panRight" class="btn btn-outline-secondary btn-sm">→</button>
+        <button id="zoomOut" class="btn btn-outline-secondary btn-sm">−</button>
+        <button id="panDown" class="btn btn-outline-secondary btn-sm">↓</button>
+        <button id="rotateLeft" class="btn btn-outline-secondary btn-sm">⟲</button>
+      </div>
+    </div>
+
+    <!-- Stage -->
+    <div id="stageContainer"></div>
+    <div id="plannerInitError" style="display:none;"></div>
+    <div id="printLayout" aria-hidden="true">
+      <style id="printPageStyle">@page { size: letter landscape; margin: 4mm; }</style>
+      <div id="printMapSheet" class="print-sheet print-map-sheet">
+        <div class="print-sheet-header">
+          <div class="print-sheet-title-group">
+            <div id="printTitle"></div>
+            <div id="printNote"></div>
+          </div>
+          <div id="printModified"></div>
+        </div>
+        <div class="print-map-content">
+          <div class="print-sheet-body"><img id="printImage" alt="Floorplan print preview" /><aside id="printMapOverlay" class="print-map-overlay" aria-label="Map key"></aside></div>
+          <aside id="printKeySidebar" class="print-key-sidebar" aria-label="Setup key"><div id="printKeyContent" class="print-key-content"><div id="printTentSetupSummary" class="print-inventory-summary" style="display:none;"></div><div id="printPipeDrapeSummary" class="print-inventory-summary" style="display:none;"></div><div id="printFenceRunsSummary" class="print-inventory-summary" style="display:none;"></div><div id="printLightRunsSummary" class="print-inventory-summary" style="display:none;"></div><div id="printFlooringSummary" class="print-inventory-summary" style="display:none;"></div><div id="printSeatingSummary" class="print-inventory-summary" style="display:none;"></div><div id="printInventorySummary" class="print-inventory-summary" style="display:none;"></div><div id="printNotesSummary" class="print-inventory-summary print-notes-summary" style="display:none;"></div></div></aside>
+          <aside id="printKeyBelow" class="print-key-below" aria-label="Setup key"></aside>
+        </div>
+      </div>
+      <div id="printKeySheet" class="print-sheet print-key-sheet" style="display:none;"><div class="print-sheet-header"><div id="printKeyPageTitle" class="print-key-page-title"></div><div id="printKeyPageModified"></div></div><div id="printKeyPageContent" class="print-key-page-content"></div><div id="printSetupLegendPageContent" class="print-setup-legend-page-content"></div></div>
+    </div>
+    <div id="printPreferencesModal" class="reference-setup-modal" role="dialog" aria-modal="true" aria-labelledby="printPreferencesTitle" style="display:none;">
+      <div class="reference-setup-dialog print-preferences-dialog">
+        <div class="reference-setup-header">
+          <div>
+            <h5 id="printPreferencesTitle" class="mb-0">Print planner</h5>
+            <div id="printPreferencesStatus" class="small text-muted"></div>
+          </div>
+          <button id="printPreferencesClose" class="btn btn-outline-secondary btn-sm" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="p-3">
+          <div class="print-preferences-actions d-flex flex-wrap gap-2 mb-3">
+            <button id="printPreferencesPrint" class="btn btn-primary btn-sm" type="button"><i class="fa-solid fa-print"></i> Print / Save PDF</button>
+            <button id="printPreferencesPrintAll" class="btn btn-outline-primary btn-sm" type="button"><i class="fa-solid fa-file-lines"></i> Print all event info</button>
+            <button id="printPreferencesCancel" class="btn btn-outline-secondary btn-sm" type="button">Cancel</button>
+          </div>
+          <fieldset class="print-preference-options">
+            <legend class="small mb-2">Print template</legend>
+            <label class="print-preference-option">
+              <input id="printLayoutMapOnly" class="form-check-input" type="radio" name="printLayoutMode" value="map-only" />
+              <span><strong>Setup Map</strong><small>Use the printable page for the visible map with an optional total-count table.</small></span>
+            </label>
+            <label class="print-preference-option">
+              <input id="printLayoutMapKey" class="form-check-input" type="radio" name="printLayoutMode" value="map-key" />
+              <span><strong>Event Plan Info</strong><small>Keep the existing map-and-information layout with visual item counts and selected setup summaries.</small></span>
+            </label>
+          </fieldset>
+          <div id="printSetupMapOptions" class="print-map-key-options mt-3">
+            <label class="form-check form-switch mb-0"><input id="printSetupLegend" class="form-check-input" type="checkbox" checked /> <span class="form-check-label">Include Total Count for items visible in this map window</span></label>
+            <label class="form-check form-switch mt-2 mb-0"><input id="printSetupLegendPage" class="form-check-input" type="checkbox" /> <span class="form-check-label">Print Total Count on a second page</span></label>
+          </div>
+          <div id="printMapKeyOptions" class="print-map-key-options mt-3">
+            <label class="form-check form-switch mb-0"><input id="printKeySamePage" class="form-check-input" type="checkbox" /> <span class="form-check-label">Keep map and information on the same page when it fits</span></label>
+          </div>
+          <fieldset class="print-orientation-options print-map-key-options mt-3">
+            <legend class="small mb-1">Page orientation</legend>
+            <label><input id="printOrientationLandscape" class="form-check-input" type="radio" name="printOrientation" value="landscape" checked /> Landscape <small>wide sheet</small></label>
+            <label><input id="printOrientationPortrait" class="form-check-input" type="radio" name="printOrientation" value="portrait" /> Portrait <small>tall sheet</small></label>
+          </fieldset>
+          <section id="printSectionPicker" class="print-section-picker mt-3" aria-labelledby="printSectionPickerTitle">
+            <div id="printSectionPickerTitle" class="small fw-semibold">Include in Event Plan Info</div>
+            <div id="printSectionOptions" class="print-section-options mt-2"></div>
+            <div id="printSectionEmpty" class="small text-muted" style="display:none;">No printable setup information is available in this event yet.</div>
+          </section>
+          <label class="form-label small mt-3">Sub label <input id="printPreferencesSubLabel" class="form-control form-control-sm" type="text" maxlength="180" placeholder="Optional setup sub label" /></label>
+          <label class="form-label small mt-3">Notes <textarea id="printPreferencesNotes" class="form-control form-control-sm" rows="4" maxlength="2400" placeholder="Optional event plan notes"></textarea></label>
+          <section class="print-preview-panel mt-3" aria-labelledby="printPreviewHeading">
+            <div class="d-flex align-items-center justify-content-between gap-2">
+              <div><div id="printPreviewHeading" class="small fw-semibold">Print preview</div><div id="printPreviewStatus" class="small text-muted">Preparing preview…</div></div>
+              <button id="printPreviewRefresh" class="btn btn-outline-secondary btn-sm" type="button"><i class="fa-solid fa-rotate"></i> Refresh</button>
+            </div>
+            <div id="printPreview" class="print-preview mt-2" aria-live="polite"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="minimizable-panel" style="display:none;" data-panel-key="settings">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="mb-0">Settings</h6>
+        <div class="d-flex gap-1">
+          <button class="btn btn-outline-secondary btn-sm panel-minimize-btn" type="button" data-panel-toggle="settingsPanel" title="Minimize panel">
+            <i class="fa-solid fa-window-minimize"></i>
+          </button>
+          <button id="settingsCloseBtn" class="btn btn-outline-secondary btn-sm" type="button">Close</button>
+        </div>
+      </div>
+      <div class="panel-window-body">
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" id="gridToggle" checked />
+          <label class="form-check-label" for="gridToggle">Show Grid</label>
+        </div>
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" id="snapToggle" checked />
+          <label class="form-check-label" for="snapToggle">Snap To Grid</label>
+        </div>
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" id="darkModeToggle" />
+          <label class="form-check-label" for="darkModeToggle">Dark mode</label>
+        </div>
+        <div class="form-check form-switch mb-2">
+          <input class="form-check-input" type="checkbox" id="itemHeightsToggle" />
+          <label class="form-check-label" for="itemHeightsToggle">Show item heights</label>
+        </div>
+        <div class="mb-2">
+          <label for="uiScale" class="form-label d-flex justify-content-between align-items-center">
+            <span>UI text &amp; icon size</span>
+            <span id="uiScaleValue">100%</span>
+          </label>
+          <input id="uiScale" type="range" class="form-range" value="100" min="80" max="150" step="5" />
+        </div>
+        <div class="mb-2">
+          <label for="gridSize" class="form-label">Feet per square</label>
+          <input id="gridSize" type="number" class="form-control form-control-sm" value="1" min="0.5" max="100" step="0.5" />
+        </div>
+        <div class="mb-2">
+          <label for="snapDistance" class="form-label d-flex justify-content-between align-items-center">
+            <span>Snap distance</span>
+            <span id="snapDistanceValue">1ft</span>
+          </label>
+          <input id="snapDistance" type="range" class="form-range" value="1" min="0.5" max="15" step="0.5" />
+        </div>
+      </div>
+    </div>
+
+    <div id="plannerLibraryPanel" class="minimizable-panel" style="display:none;" data-panel-key="plannerLibrary">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="mb-0">Saved Planners</h6>
+        <div class="d-flex gap-1">
+          <button class="btn btn-outline-secondary btn-sm panel-minimize-btn" type="button" data-panel-toggle="plannerLibraryPanel" title="Minimize panel">
+            <i class="fa-solid fa-window-minimize"></i>
+          </button>
+          <button id="plannerLibraryClose" class="btn btn-outline-secondary btn-sm" type="button">Close</button>
+        </div>
+      </div>
+      <div class="panel-window-body">
+        <div id="plannerLibraryList" class="small text-muted">Loading…</div>
+      </div>
+    </div>
+
+    <div id="inventoryKeyPanel" class="minimizable-panel" style="display:none;" data-panel-key="inventoryKey">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="mb-0">Inventory Key</h6>
+        <div class="d-flex gap-1">
+          <button id="inventoryKeyRefreshBtn" class="btn btn-outline-secondary btn-sm" type="button" title="Refresh inventory key">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-sm panel-minimize-btn" type="button" data-panel-toggle="inventoryKeyPanel" title="Minimize panel">
+            <i class="fa-solid fa-window-minimize"></i>
+          </button>
+          <button id="inventoryKeyCloseBtn" class="btn btn-outline-secondary btn-sm" type="button">Close</button>
+        </div>
+      </div>
+      <div class="panel-window-body">
+        <div class="d-flex flex-wrap gap-3 mb-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="inventoryLimitsToggle" />
+            <label class="form-check-label" for="inventoryLimitsToggle">Track limits</label>
+          </div>
+        </div>
+        <details id="inventoryKeyTotalCountSection" class="inventory-key-section inventory-key-details" open>
+          <summary class="inventory-key-section-title">Total Count <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="inventoryPrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body"><div id="inventoryKeySummary" class="small text-muted">Loading…</div></div>
+        </details>
+        <details id="inventoryKeyTentSetupsSection" class="inventory-key-section inventory-key-details" style="display:none;">
+          <summary class="inventory-key-section-title">Tent Setups <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="tentSetupsPrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body">
+            <div id="inventoryKeyTentSetups" class="small text-muted">Loading…</div>
+          </div>
+        </details>
+        <details id="inventoryKeyPipeDrapeSection" class="inventory-key-section inventory-key-details" style="display:none;">
+          <summary class="inventory-key-section-title">Pipe &amp; Drape <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="pipeDrapePrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body">
+            <div id="inventoryKeyPipeDrape" class="small text-muted">Loading…</div>
+          </div>
+        </details>
+        <details id="inventoryKeyFenceRunsSection" class="inventory-key-section inventory-key-details" style="display:none;">
+          <summary class="inventory-key-section-title">Fence Runs <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="fenceRunsPrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body"><div id="inventoryKeyFenceRuns" class="small text-muted">Loading…</div></div>
+        </details>
+        <details id="inventoryKeyLightRunsSection" class="inventory-key-section inventory-key-details" style="display:none;">
+          <summary class="inventory-key-section-title">Standalone Lights <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="lightRunsPrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body"><div id="inventoryKeyLightRuns" class="small text-muted">Loading…</div></div>
+        </details>
+        <details id="inventoryKeyFlooringSection" class="inventory-key-section inventory-key-details" style="display:none;">
+          <summary class="inventory-key-section-title">Flooring <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="flooringPrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body"><div id="inventoryKeyFlooring" class="small text-muted">Loading…</div></div>
+        </details>
+        <details id="inventoryKeySeatingSection" class="inventory-key-section inventory-key-details" style="display:none;">
+          <summary class="inventory-key-section-title">Seating <label class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="seatingPrintToggle" /><span class="form-check-label">Print Info</span></label></summary>
+          <div class="inventory-key-details-body"><div id="inventoryKeySeating" class="small text-muted">Loading…</div></div>
+        </details>
+        <details id="inventoryFullSection" class="inventory-key-section inventory-key-details">
+          <summary class="inventory-key-section-title">Full Inventory</summary>
+          <div class="inventory-key-details-body">
+            <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+              <div class="small text-muted">Manual totals and full list</div>
+              <button id="inventoryTotalsClearBtn" class="btn btn-outline-secondary btn-sm" type="button">Clear Totals</button>
+            </div>
+            <input id="inventoryKeyFilter" class="form-control form-control-sm mb-2" type="text" placeholder="Filter inventory..." />
+            <div id="inventoryKeyList" class="small text-muted">Loading…</div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div id="layersPanel" class="minimizable-panel" style="display:none;" data-panel-key="layers">
+      <div class="d-flex align-items-center justify-content-between mb-2">
+        <h6 class="mb-0">Layers</h6>
+        <div class="d-flex gap-1">
+          <button class="btn btn-outline-secondary btn-sm panel-minimize-btn" type="button" data-panel-toggle="layersPanel" title="Minimize panel">
+            <i class="fa-solid fa-window-minimize"></i>
+          </button>
+          <button id="layersCloseBtn" class="btn btn-outline-secondary btn-sm" type="button">Close</button>
+        </div>
+      </div>
+      <div class="panel-window-body">
+        <div class="d-grid gap-2 mb-3">
+          <button id="addReferenceImageBtn" class="btn btn-outline-secondary btn-sm" type="button"><i class="fa-regular fa-image"></i> Add Reference Image</button>
+          <button id="addItemLayerBtn" class="btn btn-outline-secondary btn-sm" type="button">Add Item Layer</button>
+          <button id="addVenueLayerBtn" class="btn btn-outline-secondary btn-sm" type="button">Add Venue Layer</button>
+        </div>
+        <div id="layersList" class="small text-muted">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <div id="layoutGroupNameModal" class="reference-setup-modal" role="dialog" aria-modal="true" aria-labelledby="layoutGroupNameTitle" style="display:none;">
+      <form id="layoutGroupNameForm" class="reference-setup-dialog" novalidate>
+        <div class="reference-setup-header"><h5 id="layoutGroupNameTitle" class="mb-0">Layout group name</h5><button id="layoutGroupNameClose" class="btn btn-outline-secondary btn-sm" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="p-3"><label for="layoutGroupNameInput" class="form-label">Name</label><input id="layoutGroupNameInput" class="form-control" type="text" maxlength="80" autocomplete="off" /><div class="d-flex justify-content-end gap-2 mt-3"><button id="layoutGroupNameCancel" class="btn btn-outline-secondary btn-sm" type="button">Cancel</button><button class="btn btn-primary btn-sm" type="submit">Save group</button></div></div>
+      </form>
+    </div>
+    <div id="labelTextModal" class="reference-setup-modal" role="dialog" aria-modal="true" aria-labelledby="labelTextTitle" style="display:none;">
+      <form id="labelTextForm" class="reference-setup-dialog label-text-dialog" novalidate>
+        <div class="reference-setup-header"><div><h5 id="labelTextTitle" class="mb-0">Add label</h5><div id="labelTextSubtitle" class="small text-muted">Canvas labels stay where they are. Item labels follow their item.</div></div><button id="labelTextClose" class="btn btn-outline-secondary btn-sm" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="p-3"><label for="labelTextInput" class="form-label">Label text</label><input id="labelTextInput" class="form-control" type="text" maxlength="100" autocomplete="off" /><div class="label-text-options mt-3"><label class="form-label small mb-0">Size<input id="labelTextSize" class="form-control form-control-sm" type="number" min="8" max="72" step="1" value="16" /></label><label class="form-label small mb-0">Color<input id="labelTextColor" class="form-control form-control-color" type="color" value="#212529" /></label><label class="form-check small mb-0"><input id="labelTextBold" class="form-check-input" type="checkbox" /> <span class="form-check-label">Bold</span></label><label class="form-check small mb-0"><input id="labelTextItalic" class="form-check-input" type="checkbox" /> <span class="form-check-label">Italic</span></label></div><label class="form-check small mt-3 mb-0"><input id="labelTextBorder" class="form-check-input" type="checkbox" /> <span class="form-check-label">Box label with a single-line border</span></label><div class="d-flex justify-content-end gap-2 mt-3"><button id="labelTextCopy" class="btn btn-outline-primary btn-sm me-auto" type="button" style="display:none;"><i class="fa-regular fa-copy"></i> Copy label</button><button id="labelTextCancel" class="btn btn-outline-secondary btn-sm" type="button">Cancel</button><button class="btn btn-primary btn-sm" type="submit">Save label</button></div></div>
+      </form>
+    </div>
+    <div id="referenceSetupModal" class="reference-setup-modal" role="dialog" aria-modal="true" aria-labelledby="referenceSetupTitle" style="display:none;">
+      <div class="reference-setup-dialog">
+        <div class="reference-setup-header">
+          <div><h5 id="referenceSetupTitle" class="mb-0">Set up reference image</h5><div id="referenceSetupSubtitle" class="small text-muted">Frame the part of the image you need.</div></div>
+          <button id="referenceSetupClose" class="btn btn-outline-secondary btn-sm" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="reference-setup-layout">
+          <div class="reference-setup-canvas-wrap"><canvas id="referenceSetupCanvas" width="900" height="620"></canvas></div>
+          <div class="reference-setup-sidebar">
+            <div id="referenceSetupStatus" class="small text-muted">Drag the frame or its corners to choose what to use.</div>
+            <div class="reference-setup-view-tools" role="group" aria-label="Image view controls">
+              <span class="small fw-semibold">Image view</span>
+              <div class="btn-group btn-group-sm w-100" role="group">
+                <button id="referenceSetupZoomOut" class="btn btn-outline-secondary" type="button" title="Zoom out"><i class="fa-solid fa-minus"></i></button>
+                <output id="referenceSetupZoomValue" class="reference-setup-zoom-value" for="referenceSetupZoomOut referenceSetupZoomIn">100%</output>
+                <button id="referenceSetupZoomIn" class="btn btn-outline-secondary" type="button" title="Zoom in"><i class="fa-solid fa-plus"></i></button>
+              </div>
+              <label class="form-label small mb-0">Rotation <output id="referenceSetupRotationValue" for="referenceSetupRotation">0°</output><input id="referenceSetupRotation" class="form-range" type="range" min="-180" max="180" step="1" value="0" /></label>
+              <div class="small text-muted">Use the mouse wheel to zoom. Hold Space and drag to pan the image.</div>
+            </div>
+            <label id="referenceSetupOpacityWrap" class="form-label small mb-0">Opacity <span id="referenceSetupOpacityValue">50%</span><input id="referenceSetupOpacity" class="form-range" type="range" min="0.1" max="1" step="0.05" value="0.5" /></label>
+            <button id="referenceSetupResetFrame" class="btn btn-outline-secondary btn-sm w-100" type="button"><i class="fa-solid fa-expand"></i> Use full image</button>
+            <div id="referenceSetupAutoScale" class="reference-setup-auto small" style="display:none;"></div>
+            <button id="referenceSetupManualBtn" class="btn btn-outline-primary btn-sm w-100" type="button"><i class="fa-solid fa-ruler-combined"></i> Set scale manually</button>
+            <div id="referenceSetupManualControls" style="display:none;">
+              <label class="form-label small mb-1">Marked distance (ft)<input id="referenceSetupDistance" class="form-control form-control-sm" type="number" min="0.1" step="0.1" inputmode="decimal" /></label>
+              <button id="referenceSetupManualApply" class="btn btn-outline-primary btn-sm w-100" type="button">Use marked distance</button>
+              <div class="reference-setup-or small text-muted">or</div>
+              <label class="form-label small mb-1">Image pixels per foot<input id="referenceSetupPixelsPerFoot" class="form-control form-control-sm" type="number" min="0.01" step="0.01" inputmode="decimal" /></label>
+              <button id="referenceSetupDirectScaleApply" class="btn btn-outline-primary btn-sm w-100" type="button">Use direct scale</button>
+            </div>
+            <label class="form-check small mb-0"><input id="referenceSetupFitGrid" class="form-check-input" type="checkbox" checked /> <span class="form-check-label">Fit grid to image (2-square margin)</span></label>
+            <div class="reference-setup-actions"><button id="referenceSetupApply" class="btn btn-primary btn-sm" type="button" disabled>Apply reference</button><button id="referenceSetupCancel" class="btn btn-outline-secondary btn-sm" type="button">Cancel</button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/pdfjs/pdf.min.js') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/floorplanner.js', v='20260906-stage-skirt-estimate-v113') }}"></script>
+  </body>
+</html>

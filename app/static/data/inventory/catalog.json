@@ -1,0 +1,794 @@
+{
+  "sections": [
+    {
+      "id": "tables",
+      "title": "Tables",
+      "defaultOpen": true,
+      "items": [
+        {
+          "id": "cocktail_round_30",
+          "name": "30\" Round Cocktail Table",
+          "type": "round",
+          "category": "cocktail",
+          "diameter": 2.5,
+          "color": "#d0cfcf",
+          "aliases": [
+            "30\" Tabletop",
+            "30\" poles",
+            "Cocktail Table Base"
+          ]
+        },
+        {
+          "id": "cocktail_round_36",
+          "name": "36\" Round Cocktail Table",
+          "type": "round",
+          "category": "cocktail",
+          "diameter": 3,
+          "color": "#d0cfcf",
+          "aliases": [
+            "36\" Tabletop",
+            "42\" poles",
+            "Cocktail Table Base"
+          ]
+        },
+        {
+          "id": "round_48",
+          "name": "48\" Round Table",
+          "type": "round",
+          "category": "round",
+          "diameter": 4,
+          "color": "#d0cfcf",
+          "aliases": [
+            "48\" Round Tables",
+            "48\" Round Tables with Center hole"
+          ]
+        },
+        {
+          "id": "round_60",
+          "name": "60\" Round Table",
+          "type": "round",
+          "category": "round",
+          "diameter": 5,
+          "color": "#d0cfcf",
+          "aliases": [
+            "60\" Round Tables",
+            "60\" Round Tables with center Hole"
+          ]
+        },
+        {
+          "id": "round_72",
+          "name": "72\" Round Table",
+          "type": "round",
+          "category": "round",
+          "diameter": 6,
+          "color": "#d0cfcf",
+          "aliases": [
+            "72\" Round Tables"
+          ]
+        },
+        {
+          "id": "banquet_6x30",
+          "name": "6' x 30\" Banquet Table",
+          "type": "table",
+          "category": "banquet",
+          "width": 2.5,
+          "length": 6,
+          "color": "#c9e3de",
+          "aliases": [
+            "6' x 30\" Banquet Tables"
+          ]
+        },
+        {
+          "id": "banquet_8x30",
+          "name": "8' x 30\" Banquet Table",
+          "type": "table",
+          "category": "banquet",
+          "width": 2.5,
+          "length": 8,
+          "color": "#c9e3de",
+          "aliases": [
+            "8' x 30\" Banquet Tables"
+          ]
+        },
+        {
+          "id": "farm_5x36",
+          "name": "5' x 36\" Farm Table",
+          "type": "table",
+          "category": "farm",
+          "width": 3,
+          "length": 5,
+          "color": "#e4d4b4",
+          "aliases": [
+            "5' x 36 \" Farm Tables - BDX"
+          ]
+        },
+        {
+          "id": "picnic_table_6",
+          "name": "6' Picnic Table",
+          "type": "table",
+          "category": "picnic",
+          "width": 5,
+          "length": 6,
+          "color": "#c9a46a",
+          "footprint": {
+            "shape": "custom_compound",
+            "components": [
+              { "kind": "polygon", "points": [{ "x": 0, "y": 1 }, { "x": 6, "y": 1 }, { "x": 6, "y": 4 }, { "x": 0, "y": 4 }] },
+              { "kind": "polygon", "points": [{ "x": 0, "y": 0 }, { "x": 6, "y": 0 }, { "x": 6, "y": 1 }, { "x": 0, "y": 1 }] },
+              { "kind": "polygon", "points": [{ "x": 0, "y": 4 }, { "x": 6, "y": 4 }, { "x": 6, "y": 5 }, { "x": 0, "y": 5 }] }
+            ]
+          },
+          "aliases": ["6 Foot Picnic Table", "Picnic Table"]
+        }
+      ]
+    },
+    {
+      "id": "chairs",
+      "title": "Chairs & Stools",
+      "defaultOpen": true,
+      "items": [
+        {
+          "id": "chiavari_chair",
+          "name": "Chiavari Chair",
+          "type": "chair",
+          "category": "dining",
+          "width": 1.5,
+          "length": 1.5,
+          "color": "#adb5bd",
+          "aliases": [
+            "Chiavari Chair -Silver",
+            "Chiavari Chair- Clear- BDX",
+            "Chiavari Chair- Gold",
+            "Chiavari Chair- White"
+          ]
+        },
+        {
+          "id": "legacy_standard_chair",
+          "name": "Standard Chair",
+          "type": "chair",
+          "category": "legacy",
+          "width": 1.67,
+          "length": 1.5,
+          "color": "#adb5bd"
+        },
+        {
+          "id": "legacy_bar_stool",
+          "name": "Bar Stool",
+          "type": "round",
+          "category": "legacy",
+          "diameter": 1.5,
+          "color": "#bdbdbd"
+        }
+      ]
+    },
+    {
+      "id": "lounge",
+      "title": "Lounge",
+      "items": [
+        {
+          "id": "ottoman_2x2",
+          "name": "2' x 2' Ottoman",
+          "type": "item",
+          "category": "ottoman",
+          "width": 2,
+          "length": 2,
+          "color": "#f3f3f3",
+          "aliases": [
+            "2' x 2' Ottomans -White",
+            "2' x 2' Ottomans -White -BDX"
+          ]
+        },
+        {
+          "id": "sofa_6",
+          "name": "6' Sofa",
+          "type": "item",
+          "category": "lounge",
+          "width": 3,
+          "length": 6,
+          "color": "#ececec",
+          "aliases": [
+            "6' Sofas -White",
+            "6' Sofas -White-BDX"
+          ]
+        },
+        {
+          "id": "loveseat_5",
+          "name": "5' Loveseat",
+          "type": "item",
+          "category": "lounge",
+          "width": 3,
+          "length": 5,
+          "color": "#ececec",
+          "aliases": [
+            "Love seat -white -BDX"
+          ]
+        },
+        {
+          "id": "coffee_table_2x2",
+          "name": "Coffee Table 2' x 2'",
+          "type": "item",
+          "category": "table",
+          "width": 2,
+          "length": 2,
+          "color": "#c8b59d",
+          "labelText": "Coffee Table 2' x 2'",
+          "aliases": [
+            "2' x 2' Coffee Table",
+            "2' x 2' Coffee Tables"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "bars",
+      "title": "Bars & Others",
+      "items": [
+        {
+          "id": "bar_4_fold",
+          "name": "4' Folding Bar",
+          "type": "item",
+          "category": "bar",
+          "width": 2,
+          "length": 4,
+          "color": "#f2f2f2",
+          "aliases": [
+            "4' Bar Folding  White"
+          ]
+        },
+        {
+          "id": "bar_6_modern",
+          "name": "6' Modern Bar",
+          "type": "item",
+          "category": "bar",
+          "width": 2.5,
+          "length": 6,
+          "color": "#ffffff",
+          "aliases": [
+            "6' Modern Bar -White"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blocking",
+      "title": "Fencing and Lights",
+      "items": [
+        {
+          "id": "grass_wall_4x8",
+          "name": "Grass Wall 4' x 8'",
+          "type": "item",
+          "category": "wall",
+          "width": 0.5,
+          "length": 4,
+          "color": "#76916a",
+          "labelText": "8H",
+          "footprint": {
+            "shape": "panel_with_bases",
+            "panelLengthFt": 4,
+            "panelDepthFt": 0.5,
+            "baseFt": 1.5
+          },
+          "aliases": [
+            "Grass Wall 4'  x 8' Tall"
+          ]
+        },
+        {
+          "id": "lattice_panel_8x8",
+          "name": "Lattice Panel 8' x 8'",
+          "type": "item",
+          "category": "wall",
+          "width": 0.5,
+          "length": 8,
+          "color": "#f4f4f4",
+          "labelText": "8H",
+          "footprint": {
+            "shape": "panel_with_bases",
+            "panelLengthFt": 8,
+            "panelDepthFt": 0.5,
+            "baseFt": 1.5
+          },
+          "aliases": [
+            "Lattice Panels W/stands 8' x 8'",
+            "Lattice Panel 4' x 8'"
+          ]
+        },
+        {
+          "id": "fence_panel_4x3",
+          "name": "Fence Panel 4' x 3'",
+          "type": "item",
+          "category": "fence",
+          "width": 0.25,
+          "length": 4,
+          "color": "#f4f4f4",
+          "labelText": "3H",
+          "footprint": {
+            "shape": "panel_with_bases",
+            "panelLengthFt": 4,
+            "panelDepthFt": 0.25,
+            "baseFt": 0.75,
+            "baseWidthFt": 0.5,
+            "baseDepthFt": 0.75
+          },
+          "aliases": [
+            "Parts Fence Panel White- 3' Height x 4' Long"
+          ]
+        },
+        {
+          "id": "fence_panel_8x3",
+          "name": "Fence Panel 8' x 3'",
+          "type": "item",
+          "category": "fence",
+          "width": 0.25,
+          "length": 8,
+          "color": "#f4f4f4",
+          "labelText": "3H",
+          "footprint": {
+            "shape": "panel_with_bases",
+            "panelLengthFt": 8,
+            "panelDepthFt": 0.25,
+            "baseFt": 0.75,
+            "baseWidthFt": 0.5,
+            "baseDepthFt": 0.75
+          },
+          "aliases": [
+            "Parts Fence Panel WHite- 3' Height x 8' Long -BDX",
+            "Parts Fence Panels White- 3' Height x 8' Long"
+          ]
+        },
+        {
+          "id": "arch",
+          "name": "Arch",
+          "type": "item",
+          "category": "arch",
+          "width": 0.5,
+          "length": 4,
+          "color": "#efb7c6",
+          "labelText": "",
+          "aliases": [
+            "Cherry Blossom Arch",
+            "Cherry Blossom Arch -Pink about 7-8ft in height"
+          ],
+          "footprint": {
+            "shape": "arch",
+            "openingFt": 3,
+            "sideFt": 0.5,
+            "depthFt": 0.5,
+            "beamDepthFt": 0.15
+          }
+        },
+        {
+          "id": "standalone_bistro_lights",
+          "name": "Standalone Bistro Lights",
+          "type": "item",
+          "category": "lighting",
+          "drawMode": "bistro",
+          "color": "#f1c75b",
+          "unit": "ft",
+          "notes": "Custom bistro-light runs."
+        },
+        {
+          "id": "light_post",
+          "name": "Light Post",
+          "type": "item",
+          "category": "lighting",
+          "width": 3,
+          "length": 3,
+          "color": "#59636b",
+          "hiddenFromPanel": true,
+          "footprint": {
+            "shape": "light_post",
+            "baseFt": 3,
+            "pipeDiameterIn": 4
+          },
+          "notes": "3 foot square base with a 4 inch light pole."
+        }
+      ]
+    },
+    {
+      "id": "equipment",
+      "title": "Equipment",
+      "items": [
+        {
+          "id": "grill_6_charcoal",
+          "name": "72\" Charcoal Grill",
+          "type": "item",
+          "category": "grill",
+          "width": 2.5,
+          "length": 6,
+          "color": "#4f5257",
+          "aliases": [
+            "72\" Charcoal Grill"
+          ]
+        },
+        {
+          "id": "grill_6_gas",
+          "name": "72\" Gas Grill",
+          "type": "item",
+          "category": "grill",
+          "width": 2.5,
+          "length": 6,
+          "color": "#4f5257",
+          "aliases": [
+            "72\" Gas Grill -"
+          ]
+        },
+        {
+          "id": "cooler_open_chiller",
+          "name": "Open Chiller Cooler",
+          "type": "item",
+          "category": "cooler",
+          "width": 2.25,
+          "length": 3.5,
+          "color": "#dce3e8",
+          "aliases": [
+            "Cooler Tabletop open Chiller"
+          ],
+          "notes": "Approximate off-the-shelf 150 qt footprint."
+        },
+        {
+          "id": "cooler_120qt",
+          "name": "120 Qt Cooler",
+          "type": "item",
+          "category": "cooler",
+          "width": 2,
+          "length": 3,
+          "color": "#dce3e8",
+          "aliases": [
+            "Cooler-120 Quart"
+          ],
+          "notes": "Approximate off-the-shelf footprint."
+        }
+      ]
+    },
+    {
+      "id": "tent_addons",
+      "title": "Tent Add-ons",
+      "items": [
+        {
+          "id": "sidewall_10x8",
+          "name": "10' Sidewall",
+          "type": "item",
+          "category": "sidewall",
+          "width": 0.25,
+          "length": 10,
+          "color": "#98b7d7",
+          "labelText": "8H",
+          "aliases": [
+            "Cathedral Sidewalls 10' x 8'",
+            "Clear Sidewalls 10' x 8'",
+            "Solid Sidewalls 10'"
+          ]
+        },
+        {
+          "id": "sidewall_20x8",
+          "name": "20' Sidewall",
+          "type": "item",
+          "category": "sidewall",
+          "width": 0.25,
+          "length": 20,
+          "color": "#98b7d7",
+          "labelText": "8H",
+          "aliases": [
+            "Cathedral Sidewalls 20' x 8'",
+            "Clear Sidewalls 20' x 8'",
+            "Mesh Sidewalls 20' x 8'",
+            "Solid Sidewalls 20'"
+          ]
+        },
+        {
+          "id": "hanging_fan_24in",
+          "name": "Hanging Fan",
+          "type": "item",
+          "category": "tent_fan",
+          "addonType": "fan",
+          "width": 1,
+          "length": 2,
+          "color": "#6d8798",
+          "notes": "24-inch hanging fan, shown as a 2 ft by 1 ft top-down footprint."
+        },
+        {
+          "id": "custom_bistro_lights",
+          "name": "Custom Bistro Lights",
+          "type": "item",
+          "category": "tent_lighting",
+          "addonType": "customBistro",
+          "color": "#f1c75b",
+          "notes": "Draw custom tent-light paths from an edge point using a 5-foot interior grid."
+        },
+        {
+          "id": "perimeter_lights",
+          "name": "Perimeter Lights",
+          "type": "item",
+          "category": "tent_lighting",
+          "addonType": "perimeterLight",
+          "color": "#f1c75b",
+          "notes": "Automatically follows the full tent perimeter."
+        },
+        {
+          "id": "chandelier_lights",
+          "name": "Chandelier Lights",
+          "type": "item",
+          "category": "tent_lighting",
+          "addonType": "chandelier",
+          "color": "#f1c75b",
+          "notes": "Automatically centers one chandelier per complete square tent section."
+        },
+        {
+          "id": "tent_leg_drape",
+          "name": "Tent Leg Drape",
+          "type": "item",
+          "category": "tent_drape",
+          "addonType": "legDrape",
+          "color": "#f8f9fa",
+          "notes": "Centered on a tent leg and extends 1.5 ft along each side of the perimeter."
+        },
+        {
+          "id": "tent_fire_extinguisher",
+          "name": "Fire Extinguisher",
+          "type": "round",
+          "category": "tent_safety",
+          "addonType": "fireExtinguisher",
+          "diameter": 1,
+          "color": "#c62828",
+          "notes": "One-foot extinguisher footprint attached inside a tent leg."
+        },
+        {
+          "id": "tent_exit_sign",
+          "name": "Exit Sign",
+          "type": "item",
+          "category": "tent_safety",
+          "addonType": "exitSign",
+          "width": 1,
+          "length": 2,
+          "color": "#198754",
+          "notes": "Two-foot perimeter sign, placed in one-foot steps."
+        },
+        {
+          "id": "tent_no_smoking_sign",
+          "name": "No Smoking Sign",
+          "type": "item",
+          "category": "tent_safety",
+          "addonType": "noSmokingSign",
+          "width": 1,
+          "length": 2,
+          "color": "#dc3545",
+          "notes": "Two-foot perimeter sign, placed in one-foot steps."
+        },
+        {
+          "id": "water_barrel_large",
+          "name": "55 Gal Water Barrel",
+          "type": "round",
+          "category": "anchor",
+          "diameter": 1.9167,
+          "weightFootprint": {
+            "shape": "circle",
+            "diameterFt": 1.9167
+          },
+          "color": "#6e93af",
+          "aliases": [
+            "Weights - Water Barrels - Large (55 GAL) BDX"
+          ],
+          "notes": "Standard 55-gallon chemical drum footprint (23 in diameter)."
+        },
+        {
+          "id": "water_barrel_small",
+          "name": "15 Gal Water Barrel",
+          "type": "round",
+          "category": "anchor",
+          "diameter": 1.25,
+          "weightFootprint": {
+            "shape": "circle",
+            "diameterFt": 1.25
+          },
+          "color": "#6e93af",
+          "aliases": [
+            "Weights - Water Barrels - Small (15 GAL)"
+          ],
+          "notes": "Standard 15-gallon chemical drum footprint (15 in diameter)."
+        },
+        {
+          "id": "concrete_block_250",
+          "name": "250 lb Concrete Block",
+          "type": "item",
+          "category": "anchor",
+          "width": 1.5,
+          "length": 1.5,
+          "weightFootprint": {
+            "shape": "rect",
+            "widthFt": 1.5,
+            "lengthFt": 1.5
+          },
+          "color": "#8f8f8f",
+          "aliases": [
+            "Concrete Covers -250 Pounds",
+            "Weights - Concrete Blocks -250 lbs.",
+            "Weights - Concrete Blocks -250 lbs. BDX"
+          ]
+        },
+        {
+          "id": "concrete_block_450",
+          "name": "450 lb Concrete Block",
+          "type": "item",
+          "category": "anchor",
+          "width": 1.5,
+          "length": 2.5,
+          "weightFootprint": {
+            "shape": "rect",
+            "widthFt": 1.5,
+            "lengthFt": 2.5
+          },
+          "color": "#7e7e7e",
+          "aliases": [
+            "Concrete Covers - 450 Pounds (Large)",
+            "Weights - Concrete Blocks - 450 lbs.(Large)",
+            "Weights - Concrete Blocks - 450 lbs.BDX"
+          ]
+        },
+        {
+          "id": "bucket_weight_60",
+          "name": "60 lb Bucket Weight",
+          "type": "round",
+          "category": "anchor",
+          "diameter": 1,
+          "weightFootprint": {
+            "shape": "circle",
+            "diameterFt": 1
+          },
+          "color": "#7e7e7e",
+          "aliases": [
+            "Concrete Covers - Small (Bucket)",
+            "Weights - Concrete Blocks - 60 lbs. (Bucket)"
+          ],
+          "notes": "Standard 5-gallon concrete-filled bucket footprint (12 in diameter)."
+        }
+      ]
+    },
+    {
+      "id": "pipe_drape",
+      "title": "Pipe & Drape",
+      "items": [
+        {
+          "id": "backdrop_20lf",
+          "name": "20LF Double Drape Backdrop",
+          "type": "item",
+          "category": "drape",
+          "width": 0.5,
+          "length": 20,
+          "color": "#b98fc1",
+          "labelText": "Backdrop",
+          "aliases": [
+            "20LF Double Drape Backdrop"
+          ]
+        },
+        {
+          "id": "door_opening_10",
+          "name": "8'-10' Drape Door Opening",
+          "type": "item",
+          "category": "drape",
+          "width": 0.5,
+          "length": 10,
+          "color": "#b98fc1",
+          "labelText": "8-10W",
+          "aliases": [
+            "8' -10LF Double Drape Door way Opening",
+            "8' -10LF Drape Door way Opening"
+          ]
+        },
+        {
+          "id": "upright_8_14",
+          "name": "Upright 8'-14'",
+          "type": "round",
+          "category": "upright",
+          "diameter": 0.25,
+          "color": "#7f8a92",
+          "labelText": "8-14H",
+          "aliases": [
+            "1 1/2\" Uprights - 8 to 14' Tall -",
+            "2\" Uprights  - 8 -to 14' Tall"
+          ]
+        },
+        {
+          "id": "upright_8_20",
+          "name": "Upright 8'-20'",
+          "type": "round",
+          "category": "upright",
+          "diameter": 0.25,
+          "color": "#7f8a92",
+          "labelText": "8-20H",
+          "aliases": [
+            "2\" Uprights  - 8 -to 20' Tall"
+          ]
+        },
+        {
+          "id": "upright_7_12",
+          "name": "Upright 7'-12'",
+          "type": "round",
+          "category": "upright",
+          "diameter": 0.25,
+          "color": "#7f8a92",
+          "labelText": "7-12H",
+          "aliases": [
+            "2\" Uprights - 7 -to 12' Tall"
+          ]
+        },
+        {
+          "id": "upright_fixed_3",
+          "name": "Fixed Upright 3'",
+          "type": "round",
+          "category": "upright",
+          "diameter": 0.25,
+          "color": "#7f8a92",
+          "labelText": "3H",
+          "aliases": [
+            "1 1/2\" Uprights - Fix 3' Tall"
+          ]
+        },
+        {
+          "id": "upright_fixed_4",
+          "name": "Fixed Upright 4'",
+          "type": "round",
+          "category": "upright",
+          "diameter": 0.25,
+          "color": "#7f8a92",
+          "labelText": "4H",
+          "aliases": [
+            "1 1/2\" Uprights - Fix 4' Tall"
+          ]
+        },
+        {
+          "id": "crossbar_3",
+          "name": "3' Crossbar",
+          "type": "item",
+          "category": "crossbar",
+          "width": 0.25,
+          "length": 3,
+          "color": "#85939c",
+          "labelText": "3W",
+          "aliases": [
+            "3' Pipe Stock"
+          ]
+        },
+        {
+          "id": "crossbar_5_7",
+          "name": "5'-7' Crossbar",
+          "type": "item",
+          "category": "crossbar",
+          "width": 0.25,
+          "length": 7,
+          "color": "#85939c",
+          "labelText": "5-7W",
+          "aliases": [
+            "Crossbars - 5' - 7'"
+          ]
+        },
+        {
+          "id": "crossbar_6_10",
+          "name": "6'-10' Crossbar",
+          "type": "item",
+          "category": "crossbar",
+          "width": 0.25,
+          "length": 10,
+          "color": "#85939c",
+          "labelText": "6-10W",
+          "aliases": [
+            "Crossbars - 6' - 10'"
+          ]
+        },
+        {
+          "id": "crossbar_7_12",
+          "name": "7'-12' Crossbar",
+          "type": "item",
+          "category": "crossbar",
+          "width": 0.25,
+          "length": 12,
+          "color": "#85939c",
+          "labelText": "7-12W",
+          "aliases": [
+            "Crossbars - 7' - 12'"
+          ]
+        }
+      ]
+    }
+  ],
+  "measurement_backlog": []
+}

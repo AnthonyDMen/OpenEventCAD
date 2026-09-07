@@ -1,0 +1,137 @@
+[
+    {
+        "name": "10x10 Room",
+        "width": 10,
+        "height": 10,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "10x20 Room",
+        "width": 10,
+        "height": 20,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "10x30 Room",
+        "width": 10,
+        "height": 30,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "15x15 Room",
+        "width": 15,
+        "height": 15,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "15x20 Room",
+        "width": 15,
+        "height": 20,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "15x30 Room",
+        "width": 15,
+        "height": 30,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "20x20 Room",
+        "width": 20,
+        "height": 20,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "20x30 Room",
+        "width": 20,
+        "height": 30,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "20x40 Room",
+        "width": 20,
+        "height": 40,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "30x30 Room",
+        "width": 30,
+        "height": 30,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "30x40 Room",
+        "width": 30,
+        "height": 40,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "30x50 Room",
+        "width": 30,
+        "height": 50,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "30x60 Room",
+        "width": 30,
+        "height": 60,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "40x40 Room",
+        "width": 40,
+        "height": 40,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    },
+    {
+        "name": "40x60 Room",
+        "width": 40,
+        "height": 60,
+        "outline": {
+            "style": "solid",
+            "thickness": 4
+        }
+    }
+]

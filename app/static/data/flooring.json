@@ -1,0 +1,55 @@
+[
+  {
+    "name": "Subfloor",
+    "type": "floor",
+    "category": "subfloor",
+    "tileSize": 4,
+    "allowedFactor": 4,
+    "minSize": 4,
+    "color": "#b0b0b0",
+    "borderColor": "#707070",
+    "layer": "subfloor"
+  },
+  {
+    "name": "Stage",
+    "type": "floor",
+    "category": "stage",
+    "tileSize": 4,
+    "allowedFactor": 2,
+    "color": "#3d3d3d",
+    "borderColor": "#000000",
+    "layer": "stage",
+    "fillers": { "rect": [2, 4], "square": [2, 2] },
+    "heightOptionsIn": [6, 12, 24],
+    "attachments": ["Basic Step", "Adjustable Stairs", "Stage Railing 4ft", "Stage Railing 2ft"]
+  },
+  {
+    "name": "Modern Dance Floor",
+    "type": "floor",
+    "category": "modernDancefloor",
+    "tileSize": 3,
+    "allowedFactor": 3,
+    "color": "#d7b98b",
+    "borderColor": "#704c21",
+    "layer": "dancefloor",
+    "panelSize": [3, 3],
+    "edgeLengthFt": 1.5,
+    "edgeWidthIn": 3,
+    "cornerCount": 4
+  },
+  {
+    "name": "Classic Dance Floor",
+    "type": "floor",
+    "category": "classicDancefloor",
+    "tileSize": 1,
+    "allowedFactor": 1,
+    "minSize": 1,
+    "color": "#caa874",
+    "borderColor": "#704c21",
+    "layer": "dancefloor",
+    "panelSize": [1, 1],
+    "edgeLengthFt": 1,
+    "edgeWidthIn": 4,
+    "cornerCount": 8
+  }
+]

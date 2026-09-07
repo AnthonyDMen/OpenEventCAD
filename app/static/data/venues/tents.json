@@ -1,0 +1,162 @@
+[
+    {
+        "name": "10x10 Tent",
+        "type": "tent",
+        "width": 10,
+        "height": 10,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "10x15 Tent",
+        "type": "tent",
+        "width": 10,
+        "height": 15,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 15, "diameter": 0.5 }
+    },
+    {
+        "name": "10x20 Tent",
+        "type": "tent",
+        "width": 10,
+        "height": 20,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "10x30 Tent",
+        "type": "tent",
+        "width": 10,
+        "height": 30,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "15x15 Tent",
+        "type": "tent",
+        "width": 15,
+        "height": 15,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 15, "diameter": 0.5 }
+    },
+    {
+        "name": "15x20 Tent",
+        "type": "tent",
+        "width": 15,
+        "height": 20,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [10, 10], "diameter": 0.5 }
+    },
+    {
+        "name": "15x30 Tent",
+        "type": "tent",
+        "width": 15,
+        "height": 30,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [15, 15], "diameter": 0.5 }
+    },
+    {
+        "name": "15x40 Tent",
+        "type": "tent",
+        "width": 15,
+        "height": 40,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [15, 10, 15], "diameter": 0.5 }
+    },
+    {
+        "name": "20x20 Tent",
+        "type": "tent",
+        "width": 20,
+        "height": 20,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "20x30 Tent",
+        "type": "tent",
+        "width": 20,
+        "height": 30,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "20x40 Tent",
+        "type": "tent",
+        "width": 20,
+        "height": 40,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "20x50 Tent",
+        "type": "tent",
+        "width": 20,
+        "height": 50,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "30x30 Tent",
+        "type": "tent",
+        "width": 30,
+        "height": 30,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [15, 10], "diameter": 0.5 }
+    },
+    {
+        "name": "30x40 Tent",
+        "type": "tent",
+        "width": 30,
+        "height": 40,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [15, 10], "diameter": 0.5 }
+    },
+    {
+        "name": "30x50 Tent",
+        "type": "tent",
+        "width": 30,
+        "height": 50,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [15, 10], "diameter": 0.5 }
+    },
+    {
+        "name": "30x60 Tent",
+        "type": "tent",
+        "width": 30,
+        "height": 60,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": [15, 10], "diameter": 0.5 }
+    },
+    {
+        "name": "40x40 Tent",
+        "type": "tent",
+        "width": 40,
+        "height": 40,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "40x50 Tent",
+        "type": "tent",
+        "width": 40,
+        "height": 50,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "40x60 Tent",
+        "type": "tent",
+        "width": 40,
+        "height": 60,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    },
+    {
+        "name": "40x70 Tent",
+        "type": "tent",
+        "width": 40,
+        "height": 70,
+        "outline": { "style": "dashed", "thickness": 2 },
+        "legs": { "spacing": 10, "diameter": 0.5 }
+    }
+]

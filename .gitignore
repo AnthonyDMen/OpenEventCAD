@@ -1,0 +1,13 @@
+.env
+.deploy/
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.pytest_cache/
+instance/
+node_modules/
+*.sqlite3
+*.sql
+coverage/
+.coverage

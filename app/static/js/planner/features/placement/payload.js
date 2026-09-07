@@ -1,0 +1,15 @@
+/** Converts an inventory palette button into a normalized placement payload. */
+
+export function placementPayloadFromInventoryButton(btn, pixelsPerFoot) {
+  const { dataset } = btn; const type = dataset.type; const unitHint = typeof dataset.unit === 'string' ? dataset.unit.trim().toLowerCase() : '';
+  const toFeet = (value, fallback) => { if (value === undefined || value === null || value === '') return fallback; const number = typeof value === 'number' ? value : parseFloat(value); if (!Number.isFinite(number)) return fallback; if (unitHint === 'ft' || unitHint === 'feet') return number; if (unitHint === 'px' || unitHint === 'pixel' || unitHint === 'pixels') return number / pixelsPerFoot; return !unitHint && number > 20 ? number / pixelsPerFoot : number; };
+  const hasLength = dataset.length !== undefined; const hasHeight = dataset.height !== undefined; const hasWidth = dataset.width !== undefined;
+  let widthFt = 1; let lengthFt = 1;
+  if (hasLength) { widthFt = toFeet(hasWidth ? dataset.width : dataset.length, 1); lengthFt = toFeet(dataset.length, 1); }
+  else if (hasHeight && hasWidth) { widthFt = toFeet(dataset.height, 1); lengthFt = toFeet(dataset.width, 1); }
+  else if (hasHeight || hasWidth) { widthFt = toFeet(hasHeight ? dataset.height : dataset.width, 1); lengthFt = widthFt; }
+  const inventoryCategory = dataset.inventoryCategory || dataset.sectionId || ''; const drawMode = dataset.drawMode || ''; const addonType = dataset.addonType || (inventoryCategory === 'sidewall' ? 'sidewall' : inventoryCategory === 'anchor' ? 'weight' : '');
+  const json = (value, fallback) => value ? JSON.parse(value) : fallback;
+  const rawData = { type, category: inventoryCategory, addonType: addonType || undefined, drawMode: drawMode || undefined, width: hasWidth ? parseFloat(dataset.width) : undefined, length: hasLength ? parseFloat(dataset.length) : undefined, height: hasHeight ? parseFloat(dataset.height) : undefined, diameter: dataset.diameter !== undefined ? parseFloat(dataset.diameter) : undefined, radius: dataset.radius !== undefined ? parseFloat(dataset.radius) : undefined, color: dataset.color || undefined, unit: unitHint || undefined, inventoryName: dataset.inventoryName || undefined, familyId: dataset.familyId || undefined, labelText: dataset.labelText || undefined, cocktailHeightMode: dataset.cocktailHeightMode || undefined, footprint: json(dataset.footprint, undefined), weightFootprint: json(dataset.weightFootprint, undefined) };
+  return { kind: drawMode ? 'drawnRun' : addonType ? 'tentAddon' : 'item', addonType: addonType || undefined, drawMode: drawMode || undefined, type, label: btn.textContent.trim() || type, autoLabelText: dataset.labelText || '', familyId: dataset.familyId || '', color: dataset.color || undefined, unit: unitHint || '', footprint: json(dataset.footprint, null), weightFootprint: json(dataset.weightFootprint, null), widthFt, lengthFt, diameterFt: toFeet(dataset.diameter, undefined), radiusFt: toFeet(dataset.radius, undefined), rawData };
+}
