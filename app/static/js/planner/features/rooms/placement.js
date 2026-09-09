@@ -38,6 +38,7 @@ export function createRoomAttachmentPlacement(ctx) {
     const rooms = worldLayer && worldLayer.find ? collectionToArray(worldLayer.find('.venue')) : [];
     rooms.forEach((room) => {
       if (!room || (room.isVisible && !room.isVisible()) || room.getAttr('customType') !== 'venue' || room.getAttr('venueType') === 'tent') return;
+      if (ctx.isSelectableNode && !ctx.isSelectableNode(room)) return;
       const local = localPoint(room, worldPoint);
       if (!local || !Number.isFinite(local.x) || !Number.isFinite(local.y)) return;
       const components = roomAttachmentComponents(room.getAttr('widthFt'), room.getAttr('heightFt'), room.getAttr('componentsSpec'));
@@ -90,8 +91,8 @@ export function createRoomAttachmentPlacement(ctx) {
       return;
     }
     const wall = match.wall;
-    const attachment = { t: wall.t, widthFt: Number(placementPayload.widthFt) || 3 };
-    roomAttachmentClamp(attachment, wall, []);
+    const attachment = { id: 'preview', componentId: match.component.id, wallIndex: wall.index, t: wall.t, widthFt: Number(placementPayload.widthFt) || 3 };
+    if (!roomAttachmentClamp(attachment, wall, roomAttachmentList({ attachments: match.room.getAttr('attachmentsSpec') || [] }))) { placementPreview.hide(); worldLayer.batchDraw(); return; }
     const point = { x: wall.a.x + wall.dx * attachment.t, y: wall.a.y + wall.dy * attachment.t };
     placementPreview.destroyChildren();
     placementPreview.position(match.room.position());
@@ -126,7 +127,10 @@ export function createRoomAttachmentPlacement(ctx) {
     const attachments = roomAttachmentList({ attachments: best.room.getAttr('attachmentsSpec') || [] });
     const attachment = { id: `room-attachment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, type, componentId: best.component.id || 'room-outline', wallIndex: best.wall.index, t: best.wall.t, widthFt: Number(placementPayload && placementPayload.widthFt) || 3, swing: placementPayload && placementPayload.swing === 'outward' ? 'outward' : 'inward' };
     const wall = roomWall(best.component, attachment.wallIndex);
-    roomAttachmentClamp(attachment, wall, attachments);
+    if (!wall || !roomAttachmentClamp(attachment, wall, attachments)) {
+      showPlannerToast('There is not enough room on this wall for that width.');
+      return false;
+    }
     if (Math.abs(attachment.t - best.wall.t) > 0.02 && attachments.some((item) => item.componentId === attachment.componentId && Number(item.wallIndex) === attachment.wallIndex)) {
       showPlannerToast('There is not enough room beside another wall attachment.');
       return false;

@@ -43,6 +43,7 @@ export function closestStageForAddonPlacement(ctx, worldPoint, widthFt) {
   let best = null;
   forEachNode((node) => {
     if (!(node && node.getAttr && node.getAttr('isFlooring') && node.getAttr('floorCategory') === 'stage')) return;
+    if (ctx.isSelectableNode && !ctx.isSelectableNode(node)) return;
     const angle = -(Number(node.rotation && node.rotation()) || 0) * Math.PI / 180;
     const dx = worldPoint.x - node.x();
     const dy = worldPoint.y - node.y();
@@ -51,6 +52,17 @@ export function closestStageForAddonPlacement(ctx, worldPoint, widthFt) {
     if (edge) best = { node, edge };
   });
   return best;
+}
+
+function restoredEdge(stage, edge, width, pixelsPerFoot) {
+  const w = Number(stage.getAttr('widthFt')) || 0;
+  const h = Number(stage.getAttr('lengthFt')) || 0;
+  const horizontal = edge.side === 'top' || edge.side === 'bottom';
+  const span = horizontal ? w : h;
+  if (span < width) return null;
+  const along = Math.max(width / 2, Math.min(span - width / 2, Number(edge.along) || width / 2));
+  const point = { x: (horizontal ? along : edge.side === 'left' ? 0 : w) * pixelsPerFoot, y: (horizontal ? edge.side === 'top' ? 0 : h : along) * pixelsPerFoot };
+  return stageAddonEdge(stage, point, width, pixelsPerFoot);
 }
 
 export function syncStageAddonsForStage(ctx, stage) {
@@ -62,7 +74,9 @@ export function syncStageAddonsForStage(ctx, stage) {
   const sin = Math.sin(angle);
   forEachNode((node) => {
     if (!(node && node.getAttr && node.getAttr('customType') === 'stageAddon' && node.getAttr('parentStageNodeId') === stageId)) return;
-    const edge = node.getAttr('stageEdge') || {};
+    const edge = restoredEdge(stage, node.getAttr('stageEdge') || {}, Number(node.getAttr('widthFt')) || 2, pixelsPerFoot);
+    if (!edge) return;
+    node.setAttrs({ stageEdge: edge, side: edge.side });
     const depth = Number(node.getAttr('lengthFt')) || 1;
     const horizontal = edge.side === 'top' || edge.side === 'bottom';
     const stageWidth = Number(stage.getAttr('widthFt')) || 0;
@@ -78,7 +92,8 @@ export function clampStageAddonNode(ctx, node, stage) {
   const { pixelsPerFoot } = ctx;
   if (!(node && stage)) return;
   const width = Number(node.getAttr('widthFt')) || 2;
-  const edge = node.getAttr('stageEdge') || {};
+  const edge = restoredEdge(stage, node.getAttr('stageEdge') || {}, width, pixelsPerFoot);
+  if (!edge) return;
   const side = edge.side;
   const stageWidth = Number(stage.getAttr('widthFt')) || 0;
   const stageLength = Number(stage.getAttr('lengthFt')) || 0;
@@ -92,6 +107,7 @@ export function clampStageAddonNode(ctx, node, stage) {
   else local.y = Math.max(edge.start + width / 2, Math.min(edge.start + edge.length - width / 2, local.y / pixelsPerFoot)) * pixelsPerFoot;
   if (horizontal) local.y = (side === 'top' ? -depth / 2 : stageLength + depth / 2) * pixelsPerFoot;
   else local.x = (side === 'left' ? -depth / 2 : stageWidth + depth / 2) * pixelsPerFoot;
+  node.setAttrs({ stageEdge: { ...edge, along: (horizontal ? local.x : local.y) / pixelsPerFoot }, side });
   node.position({ x: stage.x() + local.x * Math.cos(-angle) - local.y * Math.sin(-angle), y: stage.y() + local.x * Math.sin(-angle) + local.y * Math.cos(-angle) });
   node.rotation((Number(stage.rotation && stage.rotation()) || 0) + (horizontal ? 0 : 90));
 }
@@ -119,7 +135,7 @@ export function createStageAddonNode(ctx, data, stage, worldPoint) {
   };
   const savedEdge = data && data.stageEdge;
   const edge = savedEdge && ['top', 'right', 'bottom', 'left'].includes(savedEdge.side)
-    ? savedEdge
+    ? restoredEdge(stage, savedEdge, width, pixelsPerFoot)
     : stageAddonEdge(stage, localPoint, width, pixelsPerFoot);
   if (!edge) return null;
   const horizontal = edge.side === 'top' || edge.side === 'bottom';
@@ -136,9 +152,6 @@ export function createStageAddonNode(ctx, data, stage, worldPoint) {
     node.add(new Konva.Line({ points: [-width * pixelsPerFoot / 2, y, width * pixelsPerFoot / 2, y], stroke: '#1b1f23', strokeWidth: 1, listening: false, name: 'stageStairTread' }));
   }
   attachShapeEvents(node);
-  node.on('dragmove dragend', () => {
-    const parent = getNodeById(node.getAttr('parentStageNodeId') || '');
-    if (parent) clampStageAddonNode(ctx, node, parent);
-  });
+  // The coordinator constrains before updating labels and recording history.
   return node;
 }

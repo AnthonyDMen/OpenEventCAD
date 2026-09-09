@@ -2,6 +2,13 @@
 
 export function fencePointKey(point) { return `${Math.round(point.x * 100) / 100}:${Math.round(point.y * 100) / 100}`; }
 
+export function standaloneFenceHardware(attrs) {
+  const footprint = attrs.footprintSpec || attrs.footprint;
+  const name = String(attrs.inventoryName || attrs.name || '');
+  if (footprint?.shape !== 'panel_with_bases' || !/^Fence Panel\b/i.test(name)) return [];
+  return [{ name: 'Fence Bases', amount: 2, unit: 'count' }, { name: 'Fence Poles', amount: 2, unit: 'count' }];
+}
+
 export function fenceInventoryRows(chains) {
   const rows = new Map(); const bases = new Set();
   const add = (name, amount) => { const row = rows.get(name) || { name, amount: 0, unit: 'count' }; row.amount += amount; rows.set(name, row); };

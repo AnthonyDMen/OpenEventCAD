@@ -41,6 +41,8 @@ import {
   rotatePoints,
 } from '../../app/static/js/planner/domain/shapes.js';
 import { stagePanelParts } from '../../app/static/js/planner/domain/stage.js';
+import { fenceInventoryRows, standaloneFenceHardware } from '../../app/static/js/planner/domain/fence.js';
+import { roomAttachmentClamp, roomAttachmentList } from '../../app/static/js/planner/domain/room-attachments.js';
 import { isLayoutGroupableNodeType, isValidLayoutGroupTemplate, layoutGroupConfigFromSnapshots, mergeLayoutGroupTemplates, validLayoutGroupTemplates } from '../../app/static/js/planner/domain/layout-groups.js';
 import { automaticLabelMeta, isHeightLabelText, isOptionalHeightLabel } from '../../app/static/js/planner/domain/labels.js';
 import { defaultLayers, ensureBaseLayers, fallbackLayerIdForKind, layerAcceptsPlacement, nodeIsSelectable, normaliseLayer } from '../../app/static/js/planner/domain/layers.js';
@@ -147,6 +149,30 @@ test('value and display helpers handle inventory values safely', () => {
   assert.equal(formatInventoryAmount(12.34, 'ft'), '12.3 ft');
   assert.equal(formatInventoryUsage('Bistro Lights', 27, 'ft'), '~27 ft');
   assert.equal(formatInventoryUsage('Stage Skirt', 24, 'ft'), '~24 ft');
+});
+
+test('standalone fence panels include their two bases and two poles', () => {
+  assert.deepEqual(standaloneFenceHardware({ inventoryName: "Fence Panel 8' x 3'", footprintSpec: { shape: 'panel_with_bases' } }), [
+    { name: 'Fence Bases', amount: 2, unit: 'count' },
+    { name: 'Fence Poles', amount: 2, unit: 'count' },
+  ]);
+  assert.deepEqual(standaloneFenceHardware({ inventoryName: "Grass Wall 4' x 8'", footprintSpec: { shape: 'panel_with_bases' } }), []);
+  assert.equal(fenceInventoryRows([{ panelLengthFt: 8, points: [{ x: 0, y: 0 }, { x: 96, y: 0 }] }]).rows.find((row) => row.name === 'Fence Bases').amount, 2);
+});
+
+test('room attachments clamp into the nearest available wall gap', () => {
+  const migrated = roomAttachmentList({ attachments: [], doors: [{ id: 'door-1', wallIndex: 0, position: 0.25 }], openings: [{ id: 'opening-1', wallIndex: 1, position: 0.75 }] });
+  assert.deepEqual(migrated.map((item) => [item.id, item.type]), [['door-1', 'door'], ['opening-1', 'opening']]);
+  const wall = { length: 12 };
+  const attachments = roomAttachmentList({ attachments: [
+    { id: 'a', componentId: 'room-outline', wallIndex: 0, t: 0.25, widthFt: 3 },
+    { id: 'b', componentId: 'room-outline', wallIndex: 0, t: 0.75, widthFt: 3 },
+  ] });
+  const next = { id: 'c', componentId: 'room-outline', wallIndex: 0, t: 0.5, widthFt: 4 };
+  assert.equal(roomAttachmentClamp(next, wall, attachments), null);
+  const movable = { id: 'c', componentId: 'room-outline', wallIndex: 0, t: 0.5, widthFt: 2 };
+  assert.equal(roomAttachmentClamp(movable, wall, attachments), movable);
+  assert.equal(movable.t, 0.5);
 });
 
 test('polylineLength measures connected segments in feet', () => {

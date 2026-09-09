@@ -19,11 +19,11 @@ export function normaliseLayer(raw, index, nextLayerId) {
 }
 
 export function ensureBaseLayers(layers, nextLayerId) {
-  const next = Array.isArray(layers) ? layers.map((layer, index) => normaliseLayer(layer, index, nextLayerId)) : [];
+  const next = Array.isArray(layers) ? layers.map((layer, index) => normaliseLayer(layer, BASE_LAYERS.length + index, nextLayerId)) : [];
   const baseIds = new Set(BASE_LAYERS.map((layer) => layer.id));
   const restoredBaseLayers = BASE_LAYERS.map((base) => {
     const saved = next.find((layer) => layer.id === base.id);
-    return saved ? { ...saved, ...base } : { ...base };
+    return saved ? { ...base, ...saved, id: base.id, kind: base.kind, builtIn: true } : { ...base };
   });
   const customLayers = next.filter((layer) => !baseIds.has(layer.id));
   return [...restoredBaseLayers, ...customLayers].map((layer, index) => ({ ...layer, order: index }));

@@ -29,11 +29,17 @@ export function createRoomAttachmentControls(ctx) {
       stored = { ...attachment };
       attachments.push(stored);
     }
+    const previous = { ...stored };
     Object.assign(stored, attachment);
     const components = roomAttachmentComponents(room.getAttr('widthFt'), room.getAttr('heightFt'), room.getAttr('componentsSpec'));
-    const component = components.find((item) => item.id === stored.componentId) || roomAttachmentComponents(room.getAttr('widthFt'), room.getAttr('heightFt'))[0];
+    const component = components.find((item) => item.id === stored.componentId) || components[0];
+    stored.componentId = component.id;
     const wall = roomWall(component, stored.wallIndex);
-    if (wall) roomAttachmentClamp(stored, wall, attachments);
+    if (!wall || !roomAttachmentClamp(stored, wall, attachments)) {
+      Object.assign(stored, previous);
+      ctx.showPlannerToast?.('There is not enough room on this wall for that width.');
+      return previous;
+    }
     room.setAttr('attachmentsSpec', attachments);
     room.setAttr('doorsSpec', attachments.filter((item) => item.type === 'door'));
     renderVenueAttachmentGeometry(room);

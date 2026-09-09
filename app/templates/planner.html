@@ -46,6 +46,9 @@
       <button id="panBtn" class="btn btn-outline-secondary btn-sm me-1" data-bs-toggle="tooltip" title="Pan View">
         <i class="fa-solid fa-hand"></i>
       </button>
+      <button id="rulerBtn" class="btn btn-outline-secondary btn-sm me-1" data-bs-toggle="tooltip" title="Measure Distance">
+        <i class="fa-solid fa-ruler-horizontal"></i>
+      </button>
       <span class="toolbar-divider" aria-hidden="true">|</span>
       <button id="undoBtn" class="btn btn-outline-secondary btn-sm me-1" title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button>
       <button id="redoBtn" class="btn btn-outline-secondary btn-sm me-1" title="Redo (Ctrl+Shift+Z)"><i class="fa-solid fa-rotate-right"></i></button>
@@ -273,7 +276,7 @@
     <div id="venueBuilderPanel" class="venue-builder-modal" style="display:none;" role="dialog" aria-modal="true" aria-label="Venue builder">
       <div class="venue-builder-dialog">
         <div class="d-flex align-items-center justify-content-between mb-3">
-          <div><h5 id="venueBuilderTitle" class="mb-0">Build Venue</h5><div class="small text-muted">Draw and edit your venue without leaving the planner.</div></div>
+          <div><h5 id="venueBuilderTitle" class="mb-0">Build Venue</h5><div id="venueBuilderDescription" class="small text-muted">Draw and edit your venue without leaving the planner.</div></div>
           <button id="venueBuilderClose" class="btn btn-outline-secondary btn-sm" type="button">Close</button>
         </div>
         <div class="venue-builder-layout">
@@ -626,6 +629,6 @@
     </div>
     <script src="{{ url_for('static', filename='vendor/bootstrap/bootstrap.bundle.min.js') }}"></script>
     <script src="{{ url_for('static', filename='vendor/pdfjs/pdf.min.js') }}"></script>
-    <script type="module" src="{{ url_for('static', filename='js/floorplanner.js', v='20260906-stage-skirt-estimate-v113') }}"></script>
+    <script type="module" src="{{ url_for('static', filename='js/floorplanner.js', v='20260909-engine-stability-v114') }}"></script>
   </body>
 </html>

@@ -61,6 +61,7 @@ import { inventoryMeasurementIsAssumed, inventoryRowUnit as defaultInventoryRowU
 import { constrainRoomAttachmentDrag as constrainRoomAttachment, resolveRoomAttachmentComponent, roomAttachmentClamp as clampRoomAttachment, roomAttachmentComponents as roomComponents, roomAttachmentList as normaliseRoomAttachments, roomAttachmentPoint as roomAttachmentPosition, roomAttachmentWorldPoint as attachmentWorldPoint, roomWall as roomWallGeometry, roomWallInteriorSide as roomInteriorSide } from '../domain/room-attachments.js';
 import { renderRoomAttachments, renderRoomWalls as drawRoomWalls } from '../features/rooms/render.js';
 import { inventoryLimitListMarkup, inventorySummaryTable as inventorySummaryTableMarkup, printInventorySummaryMarkup } from '../features/inventory/markup.js';
+import { groupChairRowConfigs, groupTableSeatingConfigs } from '../features/inventory/seating.js';
 import { mergeCustomTemplateRecords, readCustomInventoryItems as readStoredCustomInventoryItems, readCustomVenueTemplates as readStoredCustomVenueTemplates } from '../domain/custom-library.js';
 import { createRoomAttachmentControls } from '../features/rooms/attachments.js';
 import { createRoomAttachmentPlacement } from '../features/rooms/placement.js';
@@ -70,7 +71,7 @@ import { calibrationFactor as calculateCalibrationFactor, referenceSetupDimensio
 import { placeArmedObject as dispatchArmedPlacement } from '../features/placement/dispatch.js';
 import { placementPayloadFromInventoryButton } from '../features/placement/payload.js';
 import { createFenceChain as buildFenceChain, renderFenceGeometry as drawFenceGeometry } from '../features/fence/render.js';
-import { fenceConstrainEndpoint as constrainFenceEndpoint, fenceInventoryRows as calculateFenceInventoryRows, fencePointKey as fenceKey } from '../domain/fence.js';
+import { fenceConstrainEndpoint as constrainFenceEndpoint, fenceInventoryRows as calculateFenceInventoryRows, fencePointKey as fenceKey, standaloneFenceHardware } from '../domain/fence.js';
 import { createDrawnRunNode as buildDrawnRunNode, renderDrawnRunGeometry as drawDrawnRunGeometry } from '../features/lights/drawn-run.js';
 import { panView, resetView, rotateView, zoomView } from '../features/navigation/view.js';
 import {
@@ -113,12 +114,13 @@ export function startLegacyPlanner() {
   const LAYOUT_GROUPS_KEY = 'event-floorplanner:layout-groups:v1';
   const LAYOUT_GROUP_DELETIONS_KEY = 'event-floorplanner:layout-group-deletions:v1';
   const STANDALONE_BISTRO_MAX_SPAN_FT = 60;
-  const INVENTORY_CATALOG_VERSION = '20260905-inventory-cleanup-v2';
+  const INVENTORY_CATALOG_VERSION = '20260909-engine-stability-v3';
 
   // DOM refs
   const stageContainer = document.getElementById('stageContainer');
   const selectBtn = document.getElementById('selectBtn');
   const panBtn = document.getElementById('panBtn');
+  const rulerBtn = document.getElementById('rulerBtn');
   const copyBtn = document.getElementById('copyBtn');
   const pasteBtn = document.getElementById('pasteBtn');
   const deleteBtn = document.getElementById('deleteBtn');
@@ -667,13 +669,13 @@ export function startLegacyPlanner() {
       const data = await res.json();
       let footprintByTitle = new Map();
       try {
-        const footprintResp = await fetch('/api/inventory/catalog');
+        const footprintResp = await fetch(plannerIsSetupMode || plannerMode !== 'standalone' ? '/api/inventory/catalog' : '/api/inventory');
         if (footprintResp.ok) {
           const footprintData = await footprintResp.json();
           footprintByTitle = new Map(
             (Array.isArray(footprintData.items) ? footprintData.items : []).map((item) => [
-              String(item.title || '').trim(),
-              item.footprint || null,
+              String(item.title || item.name || '').trim(),
+              item.footprint || (item.metadata && item.metadata.footprint) || null,
             ])
           );
         }
@@ -1104,11 +1106,12 @@ export function startLegacyPlanner() {
             else { incrementUsageMap(usage, seating.tableName, 1); incrementUsageMap(usage, seating.effectiveChairName || seating.chairName, Math.max(0, parseInt(seating.chairCount, 10) || 0)); }
           } else if (attrs.customType === 'item') {
             incrementUsageMap(usage, attrs.inventoryName, 1);
+            standaloneFenceHardware(attrs).forEach((row) => addUsage(row.name, row.amount));
           }
         });
         return;
       }
-      if (customType === 'item') incrementUsageMap(usage, inferInventoryNameForNode(node), 1);
+      if (customType === 'item') { incrementUsageMap(usage, inferInventoryNameForNode(node), 1); standaloneFenceHardware(node.getAttrs()).forEach((row) => addUsage(row.name, row.amount)); }
     });
     pipeDrapeInventoryRows().rows.forEach((row) => addUsage(row.name, row.amount, row.unit));
     fenceInventoryRows().rows.forEach((row) => addUsage(row.name, row.amount, row.unit));
@@ -1142,7 +1145,7 @@ export function startLegacyPlanner() {
       if (node.getAttr('isFlooring')) { const detail = flooringInventoryDetails(node); (detail && detail.rows || []).forEach((row) => addUsage(row.name, row.amount, row.unit || 'count')); return; }
       if (customType === 'groupedSeating') { const config = node.getAttr('groupedConfig') || {}; if (config.layoutKind === 'chair_rows') addUsage(config.chairName, Number(config.chairCount) || Math.max(1, parseInt(config.rows, 10) || 1) * Math.max(1, parseInt(config.cols, 10) || 1)); else { addUsage(config.tableName); addUsage(config.effectiveChairName || config.chairName, Math.max(0, parseInt(config.chairCount, 10) || 0)); } return; }
       if (customType === 'layoutGroup') { const config = node.getAttr('layoutGroupConfig') || {}; (Array.isArray(config.nodes) ? config.nodes : []).forEach((entry) => { const attrs = entry && entry.attrs ? entry.attrs : {}; if (attrs.customType === 'groupedSeating') { const seating = attrs.groupedConfig || {}; if (seating.layoutKind === 'chair_rows') addUsage(seating.chairName, Number(seating.chairCount) || Math.max(1, parseInt(seating.rows, 10) || 1) * Math.max(1, parseInt(seating.cols, 10) || 1)); else { addUsage(seating.tableName); addUsage(seating.effectiveChairName || seating.chairName, Math.max(0, parseInt(seating.chairCount, 10) || 0)); } } else if (attrs.customType === 'item') addUsage(attrs.inventoryName); }); return; }
-      if (customType === 'item') addUsage(inferInventoryNameForNode(node));
+      if (customType === 'item') { addUsage(inferInventoryNameForNode(node)); standaloneFenceHardware(node.getAttrs()).forEach((row) => addUsage(row.name, row.amount)); }
     });
     pipeDrapeInventoryRows(drapeChains).rows.forEach((row) => addUsage(row.name, row.amount, row.unit));
     fenceInventoryRows(fenceChains).rows.forEach((row) => addUsage(row.name, row.amount, row.unit));
@@ -1166,6 +1169,7 @@ export function startLegacyPlanner() {
     const polygon = currentPrintWorkspacePolygon();
     const usage = new Map();
     const addItem = (name, amount = 1) => incrementUsageMap(usage, String(name || '').trim(), amount);
+    const addStandaloneHardware = (attrs) => standaloneFenceHardware(attrs).forEach((row) => addItem(row.name, row.amount));
     const addGroupedSeating = (config) => {
       if (!config) return;
       if ((config.layoutKind || config.groupedLayoutKind) === 'chair_rows') {
@@ -1191,11 +1195,11 @@ export function startLegacyPlanner() {
         (Array.isArray(config.nodes) ? config.nodes : []).forEach((entry) => {
           const attrs = entry && entry.attrs ? entry.attrs : {};
           if (attrs.customType === 'groupedSeating') addGroupedSeating(attrs.groupedConfig || {});
-          else if (attrs.customType === 'item') addItem(attrs.inventoryName || 'Item');
+          else if (attrs.customType === 'item') { addItem(attrs.inventoryName || 'Item'); addStandaloneHardware(attrs); }
         });
         return;
       }
-      if (customType === 'item') addItem(node.getAttr('inventoryName') || inferInventoryNameForNode(node) || 'Item');
+      if (customType === 'item') { addItem(node.getAttr('inventoryName') || inferInventoryNameForNode(node) || 'Item'); addStandaloneHardware(node.getAttrs()); }
     });
     return Array.from(usage, ([name, used]) => ({ name, used, unit: 'count' })).sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -1303,7 +1307,7 @@ export function startLegacyPlanner() {
     return { rows: Array.from(aggregate.values()), details };
   }
 
-  const stageAddonContext = () => ({ Konva, attachShapeEvents, ensureNodeId, forEachNode, getNodeById, pixelsPerFoot: FEET_TO_PX });
+  const stageAddonContext = () => ({ Konva, attachShapeEvents, ensureNodeId, forEachNode, getNodeById, isSelectableNode, pixelsPerFoot: FEET_TO_PX });
 
   function stageAddonEdge(stage, localPoint, widthFt) {
     return findStageAddonEdge(stage, localPoint, widthFt, FEET_TO_PX);
@@ -1663,7 +1667,7 @@ export function startLegacyPlanner() {
       const chairs = Number(config.chairCount) || Math.max(1, parseInt(config.rows, 10) || 1) * Math.max(1, parseInt(config.cols, 10) || 1);
       details.push({ config, count: 1, chairs, nodes: [node] });
     });
-    return details;
+    return groupChairRowConfigs(details.map((entry) => entry.config), details.map((entry) => entry.nodes[0]));
   }
 
   function seatingAisleDirection(aisle) {
@@ -1676,7 +1680,8 @@ export function startLegacyPlanner() {
   }
 
   function seatingEntryTitle(entry, kind, index) {
-    return String(entry && entry.config && entry.config.seatingLabel || `${kind} ${index + 1}`);
+    const title = String(entry && entry.config && entry.config.seatingLabel || `${kind} ${index + 1}`);
+    return entry.count > 1 ? `${title} × ${entry.count}` : title;
   }
 
   function seatingChairTypeName(value) {
@@ -1726,7 +1731,7 @@ export function startLegacyPlanner() {
       if (!(node && node.getAttr && node.getAttr('customType') === 'groupedSeating' && node.getAttr('groupedLayoutKind') === 'table_seating')) return;
       details.push({ config: node.getAttr('groupedConfig') || {}, count: 1, nodes: [node] });
     });
-    return details;
+    return groupTableSeatingConfigs(details.map((entry) => entry.config), details.map((entry) => entry.nodes[0]));
   }
 
   function renderTableSeatingSummary() {
@@ -2116,6 +2121,7 @@ export function startLegacyPlanner() {
   let plannerRedoHistory = [];
   let plannerHistoryApplying = false;
   let activeTool = 'select';
+  let rulerDraft = { start: null, end: null, overlay: null };
   let placementPayload = null;
   let placementPreview = null;
   let placementPreviewPoint = null;
@@ -2240,21 +2246,7 @@ export function startLegacyPlanner() {
   }
 
   function roomAttachmentClamp(attachment, wall, attachments = []) {
-    if (!attachment || !wall || !Number.isFinite(wall.length) || wall.length <= 0) return attachment;
-    const width = Math.min(Number(attachment.widthFt) || 3, wall.length);
-    const half = width / (2 * wall.length);
-    const others = attachments.filter((item) => item !== attachment && item.id !== attachment.id && item.componentId === attachment.componentId && Number(item.wallIndex) === Number(attachment.wallIndex));
-    let t = Math.max(half, Math.min(1 - half, Number(attachment.t) || 0));
-    others.forEach((item) => {
-      const otherHalf = Math.min(Number(item.widthFt) || 3, wall.length) / (2 * wall.length);
-      if (Math.abs(t - (Number(item.t) || 0)) < half + otherHalf) {
-        const left = (Number(item.t) || 0) - otherHalf - half;
-        const right = (Number(item.t) || 0) + otherHalf + half;
-        t = Math.abs(t - left) < Math.abs(t - right) ? left : right;
-      }
-    });
-    attachment.widthFt = width; attachment.t = Math.max(half, Math.min(1 - half, t));
-    return attachment;
+    return clampRoomAttachment(attachment, wall, attachments);
   }
 
   function roomAttachmentComponents(widthFt, heightFt, customComponents) {
@@ -2288,6 +2280,7 @@ export function startLegacyPlanner() {
     roomAttachmentClamp,
     renderVenueAttachmentGeometry,
     setDirty,
+    showPlannerToast,
     worldLayer,
   });
 
@@ -3042,6 +3035,8 @@ export function startLegacyPlanner() {
       venueBuilderName.placeholder = inventoryBuilderMode ? 'Custom item' : 'Custom venue';
     }
     if (venueBuilderTitle) venueBuilderTitle.textContent = inventoryBuilderMode ? (validTemplate ? 'Edit Custom Item' : 'Build Custom Item') : (validTemplate ? 'Edit Venue' : 'Build Venue');
+    document.getElementById('venueBuilderDescription').textContent = inventoryBuilderMode ? 'Draw and edit your item without leaving the planner.' : 'Draw and edit your venue without leaving the planner.';
+    venueBuilderPanel?.setAttribute('aria-label', inventoryBuilderMode ? 'Custom item builder' : 'Venue builder');
     if (venueBuilderGridHint) venueBuilderGridHint.textContent = inventoryBuilderMode ? 'Grid: 1′ major / ¼′ snap' : 'Grid: 5′ × 5′';
     if (venueBuilderDrawLabel) venueBuilderDrawLabel.textContent = inventoryBuilderMode ? 'Draw item shape' : 'Draw a shape';
     if (customItemBuilderOptions) customItemBuilderOptions.style.display = inventoryBuilderMode ? '' : 'none';
@@ -3335,11 +3330,18 @@ export function startLegacyPlanner() {
     const customType = node.getAttr('customType');
     let parentTent = null;
     let parentLayer = null;
+    let parentStage = null;
+    let parentStageLayer = null;
     if (customType === 'tentAddon') {
       parentTent = getNodeById(node.getAttr('parentTentNodeId') || '');
       parentLayer = parentTent ? getNodeLayer(parentTent) : null;
     }
-    return nodeIsSelectable({ selectable: node.getAttr('selectable'), customType, labelMode: node.getAttr('labelMode'), layer, parentTentLayer: parentLayer, parentTentExists: customType !== 'tentAddon' || !!parentTent });
+    if (customType === 'stageAddon') {
+      parentStage = getNodeById(node.getAttr('parentStageNodeId') || '');
+      parentStageLayer = parentStage ? getNodeLayer(parentStage) : null;
+    }
+    return nodeIsSelectable({ selectable: node.getAttr('selectable'), customType, labelMode: node.getAttr('labelMode'), layer, parentTentLayer: parentLayer, parentTentExists: customType !== 'tentAddon' || !!parentTent })
+      && (customType !== 'stageAddon' || (!!parentStage && !!parentStageLayer && parentStageLayer.visible && !parentStageLayer.locked));
   }
 
   function getEligibleNodes() {
@@ -3421,6 +3423,12 @@ export function startLegacyPlanner() {
         ? !!(layer.visible && !layer.locked && parentNode && parentLayer && parentLayer.visible && activeTool === 'select')
         : (layer.visible && ((!layer.locked && activeTool === 'select') || (labelPlacement && !layer.locked && node.getAttr && node.getAttr('customType') !== 'label' && node.getAttr('customType') !== 'referenceImage') || (tentAddonPlacement && !layer.locked && node.getAttr && node.getAttr('customType') === 'venue' && node.getAttr('venueType') === 'tent') || (stageAddonPlacement && !layer.locked && node.getAttr && node.getAttr('isFlooring') && node.getAttr('floorCategory') === 'stage')));
       if (node.visible) node.visible(visible);
+      if (node.getAttr('customType') === 'stageAddon') {
+        const parentStage = getNodeById(node.getAttr('parentStageNodeId'));
+        const parentLayer = parentStage && getNodeLayer(parentStage);
+        node.visible(!!(visible && parentLayer?.visible));
+        interactive = !!(interactive && parentLayer?.visible && !parentLayer.locked);
+      }
       if (node.getAttr && node.getAttr('customType') === 'referenceImage' && node.opacity) node.opacity(referenceImageOpacity);
       const addonTent = node && node.getAttr && node.getAttr('customType') === 'tentAddon' ? getNodeById(node.getAttr('parentTentNodeId') || '') : null;
       const parentTentLayer = addonTent ? getNodeLayer(addonTent) : null;
@@ -3693,17 +3701,20 @@ export function startLegacyPlanner() {
   }
 
   async function undoPlannerAction() {
-    if (plannerHistory.length < 2) return;
+    if (plannerHistoryApplying || plannerHistory.length < 2) return;
     const current = plannerHistory.pop(); plannerRedoHistory.push(current);
     plannerHistoryApplying = true;
     try { await loadLayout(cloneConfig(plannerHistory[plannerHistory.length - 1].snapshot)); setDirty(true); }
+    catch (error) { plannerRedoHistory.pop(); plannerHistory.push(current); await loadLayout(cloneConfig(current.snapshot)); showPlannerToast('Undo could not be restored. The current plan was retained.'); console.error(error); }
     finally { plannerHistoryApplying = false; updatePlannerHistoryButtons(); }
   }
 
   async function redoPlannerAction() {
+    if (plannerHistoryApplying) return;
     const entry = plannerRedoHistory.pop(); if (!entry) return;
     plannerHistory.push(entry); plannerHistoryApplying = true;
     try { await loadLayout(cloneConfig(entry.snapshot)); setDirty(true); }
+    catch (error) { plannerHistory.pop(); plannerRedoHistory.push(entry); await loadLayout(cloneConfig(plannerHistory[plannerHistory.length - 1].snapshot)); showPlannerToast('Redo could not be restored. The current plan was retained.'); console.error(error); }
     finally { plannerHistoryApplying = false; updatePlannerHistoryButtons(); }
   }
 
@@ -5103,8 +5114,12 @@ export function startLegacyPlanner() {
 
   function expectedAutomaticLabelMetaForNode(node, text) {
     const definition = findInventoryDefinitionForNode(node);
-    if (!definition || String(definition.labelText || '').trim() !== String(text || '').trim()) return null;
-    return automaticLabelMeta(definition.name, text);
+    if (definition && String(definition.labelText || '').trim() === String(text || '').trim()) return automaticLabelMeta(definition.name, text);
+    if (node && node.getAttr && node.getAttr('customType') === 'groupedSeating') {
+      const config = node.getAttr('groupedConfig') || {};
+      if (config.layoutKind === 'table_seating' && config.cocktailHeightMode === 'H' && String(text || '').trim() === 'H') return automaticLabelMeta(config.tableName, text);
+    }
+    return null;
   }
 
   function repairLegacyAttachedLabels() {
@@ -5113,7 +5128,7 @@ export function startLegacyPlanner() {
     forEachNode((node) => {
       if (!node || !node.getAttr) return;
       if (node.getAttr('customType') === 'label') labels.push(node);
-      else if (node.getAttr('customType') === 'item') candidates.push(node);
+      else if (node.getAttr('customType') === 'item' || node.getAttr('customType') === 'groupedSeating') candidates.push(node);
     });
     labels.forEach((label) => {
       const text = label.getAttr('labelText') || '';
@@ -5515,17 +5530,9 @@ export function startLegacyPlanner() {
     }
 
     if (payload.kind === 'groupedSeating') {
-      const widthPx = (payload.lengthFt || payload.widthFt || 6) * FEET_TO_PX;
-      const heightPx = (payload.widthFt || payload.lengthFt || 6) * FEET_TO_PX;
-      return new Konva.Rect({
-        width: widthPx,
-        height: heightPx,
-        stroke: '#fd7e14',
-        strokeWidth: 2,
-        dash: [8, 6],
-        fill: 'rgba(253, 126, 20, 0.12)',
-        listening: false,
-      });
+      const preview = createGroupedSeatingLayout(payload.groupedConfig, { preview: true });
+      if (preview) preview.setAttrs({ opacity: .55, listening: false, draggable: false, name: 'groupedSeatingPlacementPreview' });
+      return preview;
     }
 
     if (payload.kind === 'layoutGroup') {
@@ -5803,7 +5810,7 @@ export function startLegacyPlanner() {
     collectionToArray, roomAttachmentComponents, roomWall, roomAttachmentClamp, roomAttachmentList,
     roomWallInteriorSide, closestVenueBuilderWall, getPlacementPreview: () => placementPreview,
     getPlacementPayload: () => placementPayload, renderRoomWalls, renderVenueAttachmentGeometry,
-    setDirty, showPlannerToast,
+    setDirty, showPlannerToast, isSelectableNode,
   });
 
   function currentWorldPointer() { return roomAttachmentPlacement().currentWorldPointer(); }
@@ -5831,13 +5838,15 @@ export function startLegacyPlanner() {
   function placeRoomWallAttachment(worldPoint, type) { return roomAttachmentPlacement().place(worldPoint, type); }
 
   function updateToolButtons() {
-    [selectBtn, panBtn, labelToolBtn, venueToggleBtn].forEach((btn) => {
+    [selectBtn, panBtn, rulerBtn, labelToolBtn, venueToggleBtn].forEach((btn) => {
       if (btn) btn.classList.remove('tool-active');
     });
     if (activePlacementButton) activePlacementButton.classList.remove('tool-active');
 
     if (activeTool === 'pan') {
       if (panBtn) panBtn.classList.add('tool-active');
+    } else if (activeTool === 'ruler') {
+      if (rulerBtn) rulerBtn.classList.add('tool-active');
     } else if (activeTool === 'label') {
       if (labelToolBtn) labelToolBtn.classList.add('tool-active');
     } else if (activeTool === 'place' && activePlacementButton) {
@@ -5882,6 +5891,7 @@ export function startLegacyPlanner() {
   function syncToolStateUI() {
     document.body.classList.toggle('placement-armed', activeTool === 'place');
     document.body.classList.toggle('pan-mode', activeTool === 'pan');
+    document.body.classList.toggle('ruler-mode', activeTool === 'ruler');
     updateSnapToolbarButton();
     ensureLayerGroups();
     syncLayerNodeState();
@@ -5908,6 +5918,57 @@ export function startLegacyPlanner() {
     clearPlacementPreview();
   }
 
+  function formatRulerDistance(start, end) {
+    const feet = Math.hypot(end.x - start.x, end.y - start.y) / FEET_TO_PX;
+    const inches = Math.round(feet * 12);
+    if (inches < 12) return `${inches} in`;
+    const wholeFeet = Math.floor(inches / 12);
+    const remainder = inches % 12;
+    return remainder ? `${wholeFeet}′ ${remainder}″` : `${wholeFeet}′`;
+  }
+
+  function renderRuler() {
+    if (!uiGroup) return;
+    if (rulerDraft.overlay) rulerDraft.overlay.destroy();
+    rulerDraft.overlay = null;
+    if (!rulerDraft.start || !rulerDraft.end) {
+      worldLayer?.batchDraw();
+      return;
+    }
+    const { start, end } = rulerDraft;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const normal = { x: -dy / length, y: dx / length };
+    const midpoint = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+    const overlay = new Konva.Group({ listening: false, name: 'rulerOverlay' });
+    overlay.add(new Konva.Line({ points: [start.x, start.y, end.x, end.y], stroke: '#fff', strokeWidth: 7, lineCap: 'round', listening: false }));
+    overlay.add(new Konva.Line({ points: [start.x, start.y, end.x, end.y], stroke: '#dc3545', strokeWidth: 3, dash: [10, 6], lineCap: 'round', listening: false }));
+    const tick = 9;
+    [start, end].forEach((point) => overlay.add(new Konva.Line({ points: [point.x - normal.x * tick, point.y - normal.y * tick, point.x + normal.x * tick, point.y + normal.y * tick], stroke: '#dc3545', strokeWidth: 3, listening: false })));
+    const label = new Konva.Label({ x: midpoint.x + normal.x * 14, y: midpoint.y + normal.y * 14, listening: false, name: 'rulerMeasurementLabel' });
+    label.add(new Konva.Tag({ fill: '#212529', cornerRadius: 4, opacity: .9, listening: false }));
+    label.add(new Konva.Text({ text: formatRulerDistance(start, end), fontSize: 13, padding: 4, fill: '#fff', listening: false }));
+    overlay.add(label);
+    uiGroup.add(overlay);
+    overlay.moveToTop();
+    rulerDraft.overlay = overlay;
+    worldLayer.batchDraw();
+  }
+
+  function clearRulerMeasurement() {
+    if (rulerDraft.overlay) rulerDraft.overlay.destroy();
+    rulerDraft = { start: null, end: null, overlay: null };
+    worldLayer?.batchDraw();
+  }
+
+  function handleRulerPoint(point) {
+    if (!point) return;
+    if (!rulerDraft.start || rulerDraft.end) rulerDraft = { start: point, end: point, overlay: rulerDraft.overlay };
+    else rulerDraft.end = point;
+    renderRuler();
+  }
+
   function setActiveTool(tool) {
     if (tool === 'label') {
       const labelLayer = getLabelLayer();
@@ -5917,6 +5978,7 @@ export function startLegacyPlanner() {
       }
     }
     if (tool !== 'select') closePipeDrapeEdit();
+    if (tool !== 'ruler') clearRulerMeasurement();
     activeTool = tool;
     if (tool !== 'place') clearPlacementState();
     // Canvas navigation is handled by the stage touch/pointer handlers below.
@@ -6475,6 +6537,11 @@ export function startLegacyPlanner() {
     stage.on('mousedown touchstart', (e) => {
       // ignore middle-button presses here (we use middle-button for panning via DOM handlers)
       if (e && e.evt && typeof e.evt.button !== 'undefined' && e.evt.button === 1) return;
+      if (activeTool === 'ruler') {
+        const point = plannerWorldPointFromDomEvent(e.evt) || worldGroup.getRelativePointerPosition();
+        if (point) { e.evt?.preventDefault(); e.cancelBubble = true; handleRulerPoint(point); }
+        return;
+      }
       // Pan is a canvas-wide navigation tool. Handle it before item placement
       // or selection so a touch on an item cannot trap the canvas.
       if (activeTool === 'pan') {
@@ -6649,6 +6716,11 @@ export function startLegacyPlanner() {
     stage.on('dblclick dbltap click', routeGroupDoubleActivation);
 
     stage.on('mousemove touchmove', (e) => {
+      if (activeTool === 'ruler' && rulerDraft.start) {
+        const point = plannerWorldPointFromDomEvent(e.evt) || worldGroup.getRelativePointerPosition();
+        if (point) { rulerDraft.end = point; renderRuler(); }
+        return;
+      }
       if (usesTouchAddonPreview() && touchAddonPreviewActive && isTouchPlacementEvent(e && e.evt)) {
         const point = plannerWorldPointFromDomEvent(e.evt) || worldGroup.getRelativePointerPosition();
         if (point) updatePlacementPreview(point);
@@ -6846,7 +6918,10 @@ export function startLegacyPlanner() {
       if (!editable && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); handleDelete(); }
       if (!editable && e.key === 'Escape') {
         e.preventDefault();
-        if (placementPayload && placementPayload.kind === 'chairRowsAisle') {
+        if (activeTool === 'ruler') {
+          clearRulerMeasurement();
+          setActiveTool('select');
+        } else if (placementPayload && placementPayload.kind === 'chairRowsAisle') {
           setActiveTool('select');
         } else if (isPipeDrapePlacement() && pipeDrapeDraft.points.length) {
           finishPipeDrapeChain();
@@ -6987,7 +7062,8 @@ export function startLegacyPlanner() {
     transformer.resizeEnabled(selectedReference);
     transformer.keepRatio(selectedReference);
     transformer.enabledAnchors(selectedReference ? ['top-left', 'top-right', 'bottom-left', 'bottom-right'] : []);
-    transformer.rotateEnabled(!selectedSidewall && !selectedAttachedLabel);
+    const selectedStageAddon = filtered.some((node) => node.getAttr('customType') === 'stageAddon');
+    transformer.rotateEnabled(!selectedSidewall && !selectedAttachedLabel && !selectedStageAddon);
     updateRotationSnap();
     hideLabelGear();
     updateToolButtons();
@@ -7052,6 +7128,9 @@ export function startLegacyPlanner() {
       const nodeId = shape && shape.getAttr ? shape.getAttr('nodeId') : '';
       if (!nodeId) return;
       findAttachedLabels(nodeId).forEach(pushClone);
+      if (shape.getAttr('floorCategory') === 'stage') forEachNode((addon) => {
+        if (addon.getAttr('customType') === 'stageAddon' && addon.getAttr('parentStageNodeId') === nodeId) { pushClone(addon); findAttachedLabels(addon.getAttr('nodeId')).forEach(pushClone); }
+      });
     };
     selectedItems.forEach(copyWithRelatedNodes);
     selectedItems.filter((shape) => shape && shape.getAttr && shape.getAttr('customType') === 'venue' && shape.getAttr('venueType') === 'tent').forEach((tent) => {
@@ -7074,7 +7153,8 @@ export function startLegacyPlanner() {
     clearSelection();
     const newSelection = [];
 
-    for (const src of clipboard) {
+    const pasteOrder = [...clipboard].sort((a, b) => Number(a.getAttr?.('customType') === 'stageAddon') - Number(b.getAttr?.('customType') === 'stageAddon'));
+    for (const src of pasteOrder) {
       if (src && src.clipboardKind === 'tentSetup') {
         const placed = placeTentSetup(src.config, { x: src.x + offset, y: src.y + offset, rotation: src.rotation || 0, tentSetupName: src.config && src.config.tent && src.config.tent.tentSetupName });
         if (placed) {
@@ -7129,6 +7209,10 @@ export function startLegacyPlanner() {
           floorOptions: cloneConfig(src.getAttr('floorOptions')) || {},
         });
         if (clone) clone.setAttr('flooringLabel', src.getAttr('flooringLabel') || '');
+      } else if (src.getAttr('customType') === 'stageAddon') {
+        const oldParent = src.getAttr('parentStageNodeId');
+        const parent = getNodeById(nodeIdMap.get(oldParent) || oldParent);
+        if (parent && isSelectableNode(parent)) clone = createStageAddonNode({ addonType: src.getAttr('addonType'), stageEdge: cloneConfig(src.getAttr('stageEdge')) }, parent, { x: baseX, y: baseY });
       } else if (src.getAttr('customType') === 'groupedSeating') {
         clone = createGroupedSeatingLayout(cloneConfig(src.getAttr('groupedConfig')), { x: baseX, y: baseY, rotation });
       } else if (src.getAttr('customType') === 'layoutGroup') {
@@ -7186,7 +7270,7 @@ export function startLegacyPlanner() {
           setNodeLayerId(clone, destinationLayer.id);
           destinationGroup.add(clone);
         }
-        if (snapToGrid && clone.position) snapNodeToGrid(clone);
+        if (snapToGrid && clone.position && clone.getAttr('customType') !== 'stageAddon') snapNodeToGrid(clone);
         newSelection.push(clone);
       }
     }
@@ -7233,18 +7317,17 @@ export function startLegacyPlanner() {
     }
     const labelsToDelete = [];
     const tentsToDelete = new Set();
+    const stagesToDelete = new Set();
     selectedItems.forEach((shape) => {
       const nodeId = shape && shape.getAttr ? shape.getAttr('nodeId') : '';
       if (nodeId) labelsToDelete.push(...findAttachedLabels(nodeId));
+      if (shape.getAttr('floorCategory') === 'stage') stagesToDelete.add(nodeId);
       if (shape && shape.getAttr && shape.getAttr('customType') === 'venue' && shape.getAttr('venueType') === 'tent') tentsToDelete.add(nodeId);
     });
     if (tentsToDelete.size) forEachNode((node) => { if (node.getAttr && node.getAttr('customType') === 'tentAddon' && tentsToDelete.has(node.getAttr('parentTentNodeId'))) node.destroy(); });
+    if (stagesToDelete.size) forEachNode((node) => { if (node.getAttr('customType') === 'stageAddon' && stagesToDelete.has(node.getAttr('parentStageNodeId'))) { labelsToDelete.push(...findAttachedLabels(node.getAttr('nodeId'))); node.destroy(); } });
     const remainingSelection = [];
     selectedItems.forEach((shape) => {
-      if (shape && shape.getAttr && shape.getAttr('customType') === 'label' && shape.getAttr('labelMode') === 'attached') {
-        remainingSelection.push(shape);
-        return;
-      }
       shape.destroy();
     });
     [...new Set(labelsToDelete)].forEach((labelNode) => labelNode.destroy());
@@ -7969,6 +8052,9 @@ export function startLegacyPlanner() {
   }
 
   function getTableDefinitionFromConfig(config) {
+    const requestedKey = String(config?.tableKey ?? '').trim();
+    const stable = tableInventoryCache.find((entry) => String(entry.id || '').trim() === requestedKey || entry.name === config?.tableName);
+    if (stable) return stable;
     const key = Number.parseInt(config && config.tableKey, 10);
     if (Number.isInteger(key) && key >= 0 && key < tableInventoryCache.length) {
       return tableInventoryCache[key] || null;
@@ -8127,7 +8213,7 @@ export function startLegacyPlanner() {
     if (rule.layout === 'halfround') {
       const tableDiameterFt = Number(tableDef.diameter) || 5;
       const radiusFt = tableDiameterFt / 2;
-      const rectSeatGapFt = 0.25;
+      const rectSeatGapFt = clearanceFt;
       const renderedChairDepthFt = Math.max(0.1, Number(chairDef.width) || Number(chairDef.diameter) || 1.67);
       const count = Math.max(0, Math.min(maxCount, parseInt(config.chairCount, 10) || 0));
       const totalWidthFt = radiusFt + rectSeatGapFt + renderedChairDepthFt;
@@ -8215,7 +8301,7 @@ export function startLegacyPlanner() {
 
     const tableWidthFt = Number(tableDef.width) || 2.5;
     const tableLengthFt = Number(tableDef.length) || 6;
-    const rectSeatGapFt = 0.25;
+    const rectSeatGapFt = clearanceFt;
     const count = Math.max(0, Math.min(maxCount, parseInt(config.chairCount, 10) || 0));
     const totalWidthFt = tableWidthFt + (2 * rectSeatGapFt) + (2 * chairDepthFt);
     const totalLengthFt = tableLengthFt + (2 * rectSeatGapFt) + (2 * chairDepthFt);
@@ -8310,13 +8396,14 @@ export function startLegacyPlanner() {
       customType: 'groupedSeating',
       itemType: 'groupedSeating',
       groupedLayoutKind: config.layoutKind,
-      groupedConfig: { ...cloneConfig(config), chairCount: config.layoutKind === 'chair_rows' ? geometry.chairCount : config.chairCount },
+      groupedConfig: { ...cloneConfig(config), chairCount: geometry.children.filter((child) => child.kind === 'chair').length },
       selectable: true,
       widthFt: geometry.widthFt,
       lengthFt: geometry.lengthFt,
       maxChairCount: geometry.maxChairCount,
     });
-    ensureNodeId(group, 'grouped');
+    if (opts.nodeId) group.setAttr('nodeId', opts.nodeId);
+    if (!opts.preview) ensureNodeId(group, 'grouped');
     geometry.children.forEach((child) => {
       const node = createGroupedSeatingChildNode(child);
       group.add(node);
@@ -8335,7 +8422,7 @@ export function startLegacyPlanner() {
         fill: 'rgba(255, 255, 255, 0.01)', strokeWidth: 0,
         listening: true, name: 'chairRowsAisle',
       });
-      corridor.setAttrs({ customType: 'chairRowsAisle', aisleId: aisle.id, aisleWidthFt: aisle.widthFt, aisleDirection: aisle.direction, parentGroupedNodeId: ensureNodeId(group, 'grouped') });
+      corridor.setAttrs({ customType: 'chairRowsAisle', aisleId: aisle.id, aisleWidthFt: aisle.widthFt, aisleDirection: aisle.direction, parentGroupedNodeId: group.getAttr('nodeId') });
       corridor.on('dblclick dbltap', (event) => { event.cancelBubble = true; editChairRowsAisleNode(corridor); });
       group.add(corridor); corridor.moveToTop();
     });
@@ -8351,8 +8438,19 @@ export function startLegacyPlanner() {
     });
     group.add(hitRect);
     hitRect.moveToBottom();
-    attachShapeEvents(group);
+    if (!opts.preview) attachShapeEvents(group);
     return group;
+  }
+
+  function replaceSeatingGroup(node, rebuilt) {
+    const parent = node.getParent();
+    const index = node.zIndex();
+    rebuilt.setAttr('nodeId', ensureNodeId(node, 'grouped'));
+    rebuilt.find('.chairRowsAisle').forEach((aisle) => aisle.setAttr('parentGroupedNodeId', rebuilt.getAttr('nodeId')));
+    setNodeLayerId(rebuilt, node.getAttr('layerId'));
+    parent.add(rebuilt); rebuilt.zIndex(index); node.destroy();
+    syncAttachedLabelsForNode(rebuilt);
+    syncLayerNodeState();
   }
 
   function buildTentSetupConfig(tent, name = '') {
@@ -8722,6 +8820,7 @@ export function startLegacyPlanner() {
     // During multi-drag we handle movement in onPointerMove above. For individual drags, just redraw.
     shape.on('dragmove', () => {
       if (!multiDragActive) {
+        if (shape.getAttr('customType') === 'stageAddon') clampStageAddonNode(shape, getNodeById(shape.getAttr('parentStageNodeId')));
         if (shape.getAttr && shape.getAttr('customType') === 'label' && shape.getAttr('labelMode') === 'attached') syncAttachedLabelOffset(shape);
         if (standaloneLightAssemblyDrag && standaloneLightAssemblyDrag.run === shape) updateStandaloneLightAssemblyDrag(shape);
         if (isLightPost(shape)) syncBistroRunsForPosts([shape]);
@@ -8782,6 +8881,7 @@ export function startLegacyPlanner() {
         if (shape.getAttr('addonType') === 'sidewall') clearSidewallDragPreview(shape);
       }
       if (!(shape.getAttr && shape.getAttr('customType') === 'tentAddon') && !(shape.getAttr && shape.getAttr('customType') === 'label' && shape.getAttr('labelMode') === 'attached')) snapNodeToGrid(shape);
+      if (shape.getAttr('customType') === 'stageAddon') clampStageAddonNode(shape, getNodeById(shape.getAttr('parentStageNodeId')));
       if (shape.getAttr && shape.getAttr('customType') === 'label' && shape.getAttr('labelMode') === 'attached') syncAttachedLabelOffset(shape);
       if (isStandaloneBistroRun(shape)) finishStandaloneLightAssemblyDrag(shape);
       if (isLightPost(shape)) { constrainLightPostToConnectedSpans(shape); syncBistroRunsForPosts([shape]); }
@@ -9038,7 +9138,7 @@ export function startLegacyPlanner() {
     const parent = group.getParent(); if (!parent) return;
     const rebuilt = createGroupedSeatingLayout(config, { x: group.x(), y: group.y(), rotation: group.rotation() });
     if (!rebuilt) return;
-    setNodeLayerId(rebuilt, group.getAttr('layerId')); parent.add(rebuilt); group.destroy();
+    replaceSeatingGroup(group, rebuilt);
     // Keep the placement surface unobstructed while the aisle tool remains
     // armed. Selection can resume normally after the user exits the tool.
     selectedItems = []; transformer.nodes([]); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true);
@@ -9063,7 +9163,7 @@ export function startLegacyPlanner() {
     const parent = group.getParent(); if (!parent) return;
     const rebuilt = createGroupedSeatingLayout(config, { x: group.x(), y: group.y(), rotation: group.rotation() });
     if (!rebuilt) return;
-    setNodeLayerId(rebuilt, group.getAttr('layerId')); parent.add(rebuilt); group.destroy(); chairRowsEditingAisle = { group: rebuilt, aisleId: aisle.id }; selectedItems = [rebuilt]; updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true);
+    replaceSeatingGroup(group, rebuilt); chairRowsEditingAisle = { group: rebuilt, aisleId: aisle.id }; selectedItems = [rebuilt]; updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true);
     const rebuiltAisle = collectionToArray(rebuilt.getChildren()).find((node) => node.getAttr && node.getAttr('customType') === 'chairRowsAisle' && node.getAttr('aisleId') === aisle.id);
     if (rebuiltAisle) showChairRowsAisleEditPopup(rebuiltAisle, aisle);
   }
@@ -9112,7 +9212,7 @@ export function startLegacyPlanner() {
       const aisleId = escapeHtml(String(aisle.id || index));
       return `<label>Aisle ${index + 1} name<input data-chair-aisle-name="${aisleId}" type="text" value="${escapeHtml(String(aisle.name || ''))}" placeholder="Aisle ${index + 1}"></label><label>Aisle ${index + 1} ft<input data-chair-aisle-width="${aisleId}" type="number" min="2" max="20" step="1" value="${Number(aisle.widthFt) || 4}"></label>`;
     }).join('');
-    popup.innerHTML = `<button type="button" class="chair-edit-close" aria-label="Close">×</button><div class="popup-title">Edit Labels</div>
+    popup.innerHTML = `<button type="button" class="chair-edit-close" aria-label="Close">×</button><div class="popup-title">Edit Chair Rows</div>
       <div class="chair-edit-grid">
         <label>Name<input data-chair-seating-name type="text" value="${escapeHtml(String(config.seatingLabel || ''))}" placeholder="Chair Rows"></label>
         <label>Mode<select data-chair-edit="mode"><option value="free">Free</option><option value="total">Total</option></select></label>
@@ -9170,7 +9270,7 @@ export function startLegacyPlanner() {
     const parent = node.getParent();
     const rebuilt = createGroupedSeatingLayout(config, { x: node.x(), y: node.y(), rotation: node.rotation() });
     if (!rebuilt) return;
-    setNodeLayerId(rebuilt, node.getAttr('layerId')); parent.add(rebuilt); node.destroy();
+    replaceSeatingGroup(node, rebuilt);
     groupedSeatingEditNode = rebuilt; chairRowsConfigOverride = config; selectedItems = [rebuilt];
     updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true);
     showChairRowsEditPopup(rebuilt, config);
@@ -9208,7 +9308,7 @@ export function startLegacyPlanner() {
     const config = cloneConfig(node && node.getAttr ? node.getAttr('groupedConfig') : null);
     if (!(config && config.layoutKind === 'table_seating')) return;
     if (field === 'seatingLabel') { config.seatingLabel = String(value || '').trim(); node.setAttr('groupedConfig', config); refreshInventoryPanelUI(); setDirty(true); return; }
-    if (field === 'tableKey') { config.tableKey = value; const table = getTableDefinitionFromConfig(config); config.tableName = table ? table.name : config.tableName; }
+    if (field === 'tableKey') { config.tableKey = value; delete config.tableName; const table = getTableDefinitionFromConfig(config); config.tableName = table ? table.name : ''; }
     else if (field === 'chairName') { config.chairName = value; const chair = getChairDefinitionByName(value); config.effectiveChairName = chair ? chair.name : value; }
     else if (field === 'chairCount') config.chairCount = Math.max(0, parseInt(value, 10) || 0);
     else if (field === 'clearanceFt') config.clearanceFt = Math.max(0.25, parseFloat(value) || 0.25);
@@ -9217,7 +9317,7 @@ export function startLegacyPlanner() {
     const parent = node.getParent(); if (!parent) return;
     const rebuilt = createGroupedSeatingLayout(config, { x: node.x(), y: node.y(), rotation: node.rotation() });
     if (!rebuilt) return;
-    setNodeLayerId(rebuilt, node.getAttr('layerId')); parent.add(rebuilt); node.destroy(); selectedItems = [rebuilt]; updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true); editTableSeatingGroup(rebuilt);
+    replaceSeatingGroup(node, rebuilt); selectedItems = [rebuilt]; updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true); editTableSeatingGroup(rebuilt);
   }
 
   function updateEditedChairRowsGroup(node, field, value) {
@@ -9236,7 +9336,7 @@ export function startLegacyPlanner() {
     const parent = node.getParent(); if (!parent) return;
     const rebuilt = createGroupedSeatingLayout(config, { x: node.x(), y: node.y(), rotation: node.rotation() });
     if (!rebuilt) return;
-    setNodeLayerId(rebuilt, node.getAttr('layerId')); parent.add(rebuilt); node.destroy();
+    replaceSeatingGroup(node, rebuilt);
     groupedSeatingEditNode = rebuilt; chairRowsConfigOverride = config; selectedItems = [rebuilt];
     updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true);
     showChairRowsEditPopup(rebuilt, config);
@@ -9269,7 +9369,7 @@ export function startLegacyPlanner() {
     const parent = group.getParent(); if (!parent) return;
     const rebuilt = createGroupedSeatingLayout(config, { x: group.x(), y: group.y(), rotation: group.rotation() });
     if (!rebuilt) return;
-    setNodeLayerId(rebuilt, group.getAttr('layerId')); parent.add(rebuilt); group.destroy();
+    replaceSeatingGroup(group, rebuilt);
     chairRowsEditingAisle = { group: rebuilt, aisleId: null }; groupedSeatingEditNode = rebuilt; chairRowsConfigOverride = config;
     selectedItems = [rebuilt]; updateTransformer(); refreshInventoryPanelUI(); worldLayer.draw(); setDirty(true); hideChairRowsEditPopup();
   }
@@ -10022,12 +10122,15 @@ export function startLegacyPlanner() {
   }
 
   async function loadLayout(json) {
+    const restoreSelection = plannerHistoryApplying ? selectedItems.map((node) => node.getAttr('nodeId')) : [];
+    const restoreActiveLayer = activeLayerId;
+    hideTableSeatingEditPopup(); closeChairRowsEditPopup(); closeRoomAttachmentPopup();
     suppressDirtyTracking = true;
     try {
       setActiveTool('select');
       clearSelection();
       userLayers = ensureBaseLayers(Array.isArray(json.layers) && json.layers.length ? json.layers : defaultLayers());
-      activeLayerId = getLayer('items-base') ? 'items-base' : userLayers[0].id;
+      activeLayerId = plannerHistoryApplying && getLayer(restoreActiveLayer) ? restoreActiveLayer : (getLayer('items-base') ? 'items-base' : userLayers[0].id);
       ensureLayerGroups();
       layerGroups.forEach((group) => group.destroyChildren());
 
@@ -10261,6 +10364,7 @@ export function startLegacyPlanner() {
       ensureLayerOrder();
       worldLayer.draw();
       if (!plannerHistoryApplying) recordPlannerHistory(true);
+      else { selectedItems = restoreSelection.map(getNodeById).filter(Boolean); updateTransformer(); }
     } finally {
       suppressDirtyTracking = false;
     }
@@ -10642,6 +10746,7 @@ export function startLegacyPlanner() {
 
     if (selectBtn) selectBtn.addEventListener('click', () => setActiveTool('select'));
     if (panBtn) panBtn.addEventListener('click', () => setActiveTool(activeTool === 'pan' ? 'select' : 'pan'));
+    if (rulerBtn) rulerBtn.addEventListener('click', () => setActiveTool(activeTool === 'ruler' ? 'select' : 'ruler'));
     if (labelToolBtn) labelToolBtn.addEventListener('click', beginLabelPlacementTool);
     if (labelTextCopy) labelTextCopy.addEventListener('click', copyLabelFromEditor);
     if (editLabelBtn) editLabelBtn.addEventListener('click', editSelectedLabel);

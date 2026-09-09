@@ -27,7 +27,7 @@ export function renderRoomAttachments(ctx, room) {
     const component = components.find((item) => item.id === attachment.componentId) || components[0];
     const wall = roomWall(component, attachment.wallIndex);
     if (!wall) return;
-    roomAttachmentClamp(attachment, wall, attachments);
+    if (!roomAttachmentClamp(attachment, wall, attachments)) return;
     const point = roomAttachmentPoint(component, attachment);
     if (!point) return;
     const width = Math.min(attachment.widthFt, wall.length);

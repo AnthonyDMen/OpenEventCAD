@@ -67,6 +67,18 @@
           ]
         },
         {
+          "id": "halfround_60",
+          "name": "60\" Half Round Table",
+          "type": "halfround",
+          "category": "halfround",
+          "diameter": 5,
+          "width": 2.5,
+          "length": 5,
+          "color": "#d0cfcf",
+          "footprint": { "shape": "halfround", "diameterFt": 5, "depthFt": 2.5 },
+          "aliases": []
+        },
+        {
           "id": "banquet_6x30",
           "name": "6' x 30\" Banquet Table",
           "type": "table",

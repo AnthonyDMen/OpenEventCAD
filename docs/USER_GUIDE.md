@@ -45,6 +45,7 @@ Exported JSON files may contain the plan, labels, custom geometry, reference-ima
 
 - **Select / Move**: select, move, rotate, resize, copy, paste, delete, and edit placed items.
 - **Pan**: move the view without moving plan objects.
+- **Ruler**: select the ruler icon and drag across the canvas to measure a distance; press Escape or select another tool to clear it.
 - **Snap**: turn placement snapping on or off. Grid size and snap distance are separate settings.
 - **Undo / Redo**: reverse or restore recent changes.
 - **Layers**: add, reorder, hide, lock, or adjust item and venue layers.
@@ -76,6 +77,8 @@ Double-click the group or use its edit control to rename it and edit the aisle l
 3. Select **Place Table Set**, then place it.
 
 Edit a placed table-seating group to change its name, layout, and chairs per table.
+
+The same editor supports half-round tables and their attached chair layout. Similar table-seating groups are combined into one Inventory Key entry while they remain independently editable on the canvas.
 
 ## Tents and tent add-ons
 
