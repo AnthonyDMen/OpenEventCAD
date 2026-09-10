@@ -52,6 +52,14 @@ git diff --check
 
 For UI changes, also manually verify the affected placement, edit, save/reload, copy/paste, Inventory Key, print preview, and browser print result.
 
+The print browser regression requires Playwright with Chromium and Poppler's `pdfinfo` and `pdftotext` on PATH. With a local engine server running:
+
+```bash
+ENGINE_TEST_URL=http://127.0.0.1:8000 node tests/planner/print.browser.mjs
+```
+
+Set `PLAYWRIGHT_MODULE` to an installed Playwright module path and `CHROMIUM_EXECUTABLE` to a browser path when using externally managed dependencies. The test uses an isolated browser profile, checks both paper orientations with 80 fence runs and long notes, and writes preview screenshots and actual PDFs to a temporary directory. It verifies page counts, all report rows, orientation switching, and editor restoration after printing; it does not test a physical printer driver.
+
 ## Local run
 
 ```bash

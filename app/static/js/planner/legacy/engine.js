@@ -62,6 +62,7 @@ import { constrainRoomAttachmentDrag as constrainRoomAttachment, resolveRoomAtta
 import { renderRoomAttachments, renderRoomWalls as drawRoomWalls } from '../features/rooms/render.js';
 import { inventoryLimitListMarkup, inventorySummaryTable as inventorySummaryTableMarkup, printInventorySummaryMarkup } from '../features/inventory/markup.js';
 import { groupChairRowConfigs, groupTableSeatingConfigs } from '../features/inventory/seating.js';
+import { paginatePrintTables } from '../features/print/pagination.js';
 import { mergeCustomTemplateRecords, readCustomInventoryItems as readStoredCustomInventoryItems, readCustomVenueTemplates as readStoredCustomVenueTemplates } from '../domain/custom-library.js';
 import { createRoomAttachmentControls } from '../features/rooms/attachments.js';
 import { createRoomAttachmentPlacement } from '../features/rooms/placement.js';
@@ -114,7 +115,7 @@ export function startLegacyPlanner() {
   const LAYOUT_GROUPS_KEY = 'event-floorplanner:layout-groups:v1';
   const LAYOUT_GROUP_DELETIONS_KEY = 'event-floorplanner:layout-group-deletions:v1';
   const STANDALONE_BISTRO_MAX_SPAN_FT = 60;
-  const INVENTORY_CATALOG_VERSION = '20260909-engine-stability-v3';
+  const INVENTORY_CATALOG_VERSION = '20260910-engine-catalog-v4';
 
   // DOM refs
   const stageContainer = document.getElementById('stageContainer');
@@ -1440,32 +1441,6 @@ export function startLegacyPlanner() {
     if (printKeyContent) printKeyContent.appendChild(printNotesSummaryEl);
   }
 
-  function renderPortraitEventPlanStream() {
-    if (!printKeyContent) return;
-    const sections = Array.from(printKeyContent.children).filter((section) => section.style.display !== 'none' && section.innerHTML.trim());
-    if (!sections.length) return;
-    const stream = document.createElement('div');
-    stream.className = 'print-event-plan-stream';
-    sections.forEach((section) => {
-      const title = section.querySelector(':scope > .print-inventory-summary-title');
-      if (title) {
-        const row = document.createElement('div');
-        row.className = 'print-event-plan-stream-row print-event-plan-stream-title';
-        row.innerHTML = title.outerHTML;
-        stream.appendChild(row);
-      }
-      section.querySelectorAll(':scope > table').forEach((table) => {
-        const tableClass = table.className;
-        table.querySelectorAll('tr').forEach((sourceRow) => {
-          const row = document.createElement('div');
-          row.className = 'print-event-plan-stream-row';
-          row.innerHTML = `<table class="${tableClass}"><tbody>${sourceRow.outerHTML}</tbody></table>`;
-          stream.appendChild(row);
-        });
-      });
-    });
-    if (stream.children.length) printKeyContent.replaceChildren(stream);
-  }
 
   function pipeDrapeSetupDisplayRows(setup) {
     const rows = Array.isArray(setup.totals) ? setup.totals : [];
@@ -1504,7 +1479,13 @@ export function startLegacyPlanner() {
   function renderFenceRunSummary(setups) {
     if (inventoryKeyFenceRunsSection) inventoryKeyFenceRunsSection.style.display = setups.length ? '' : 'none';
     if (!inventoryKeyFenceRuns) return;
-    inventoryKeyFenceRuns.innerHTML = setups.map((setup) => detailGroupMarkup(setup.displayName, fenceRunDetailRows(setup))).join('');
+    inventoryKeyFenceRuns.innerHTML = setups.map((setup) => detailGroupMarkup(setup.displayName, fenceRunDetailRows(setup), `<button class="btn btn-outline-secondary btn-sm fence-run-rename" type="button" data-setup-id="${escapeHtml(setup.id)}" title="Rename"><i class="fa-solid fa-pen"></i></button>`)).join('');
+    inventoryKeyFenceRuns.querySelectorAll('.fence-run-rename').forEach((button) => button.addEventListener('click', () => {
+      const setup = setups.find((entry) => entry.id === button.dataset.setupId); if (!setup) return;
+      const name = window.prompt('Fence run name', setup.displayName); if (name === null) return;
+      setup.chains.forEach((chain) => chain.node.setAttr('fenceSetupName', name.trim()));
+      refreshInventoryPanelUI(); setDirty(true);
+    }));
   }
   function renderPrintFenceRunsSummary(setups) {
     if (!printFenceRunsSummaryEl) return;
@@ -1590,6 +1571,12 @@ export function startLegacyPlanner() {
   function editDoubleClickTarget(target) {
     let node = target;
     while (node && node !== stage) {
+      if (node.getAttr && node.getAttr('customType') === 'label' && isSelectableNode(node)) {
+        selectedItems = [node]; updateTransformer(); editSelectedLabel(); return true;
+      }
+      if (node.getAttr && node.getAttr('customType') === 'tentAddon' && node.getAttr('addonType') !== 'customBistro' && isSelectableNode(node)) {
+        editTentAddon(node); return true;
+      }
       if (node.getAttr && node.getAttr('customType') === 'groupedSeating') {
         if (node.getAttr('groupedLayoutKind') === 'chair_rows') editChairRowsGroup(node);
         else if (node.getAttr('groupedLayoutKind') === 'table_seating') editTableSeatingGroup(node);
@@ -2289,7 +2276,7 @@ export function startLegacyPlanner() {
   function updateRoomAttachment(room, attachment) { return roomAttachmentControls().update(room, attachment); }
 
   function renderVenueAttachmentGeometry(room) {
-    return renderRoomAttachments({ Konva, activeTool, pixelsPerFoot: FEET_TO_PX, stage, roomAttachmentList, roomAttachmentComponents, roomWall, roomAttachmentClamp, roomAttachmentPoint, roomWallInteriorSide, constrainRoomAttachmentDrag, updateRoomAttachment, openRoomAttachmentPopup }, room);
+    return renderRoomAttachments({ Konva, activeTool, pixelsPerFoot: FEET_TO_PX, stage, clearSelection, roomAttachmentList, roomAttachmentComponents, roomWall, roomAttachmentClamp, roomAttachmentPoint, roomWallInteriorSide, constrainRoomAttachmentDrag, updateRoomAttachment, openRoomAttachmentPopup }, room);
   }
 
   function renderRoomWalls(room, components, outlineCfg) {
@@ -3835,6 +3822,7 @@ export function startLegacyPlanner() {
       // connected while the item is moved or rotated, without forcing every
       // item label back to the exact centre.
       attachmentOffset: options.attachedToNodeId ? cloneConfig(options.attachmentOffset || { x: 0, y: 0 }) : null,
+      attachmentRotation: Number(options.attachmentRotation) || 0,
       autoGenerated: !!options.autoGenerated,
       labelKind: options.labelKind || '',
     });
@@ -3896,7 +3884,7 @@ export function startLegacyPlanner() {
       const radians = rotation * Math.PI / 180;
       const localX = Number(offset.x) || 0; const localY = Number(offset.y) || 0;
       labelNode.position({ x: center.x + localX * Math.cos(radians) - localY * Math.sin(radians), y: center.y + localX * Math.sin(radians) + localY * Math.cos(radians) });
-      labelNode.rotation(rotation);
+      labelNode.rotation(rotation + (Number(labelNode.getAttr('attachmentRotation')) || 0));
       if (selectedItems.includes(labelNode)) showLabelGearForNode(labelNode);
     });
   }
@@ -4574,7 +4562,7 @@ export function startLegacyPlanner() {
     const points = fenceWorldPoints(node); const connected = new Map();
     forEachNode((candidate) => { if (!(candidate && candidate.getAttr && candidate.getAttr('customType') === 'fenceChain')) return; if (fenceWorldPoints(candidate).some((a) => points.some((b) => Math.hypot(a.x - b.x, a.y - b.y) <= FEET_TO_PX))) connected.set(ensureFenceSetup(candidate), candidate); });
     connected.set(ensureFenceSetup(node), node); const choices = Array.from(connected.values()).map((candidate) => ({ id: ensureFenceSetup(candidate), order: Number(candidate.getAttr('fenceSetupOrder')) || Infinity })).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)); if (!choices.length) return '';
-    const winner = choices[0]; const ids = new Set(choices.map((choice) => choice.id)); forEachNode((candidate) => { if (candidate && candidate.getAttr && candidate.getAttr('customType') === 'fenceChain' && ids.has(ensureFenceSetup(candidate))) candidate.setAttr('fenceSetupId', winner.id); }); return winner.id;
+    const winner = choices[0]; const name = Array.from(connected.values()).map((candidate) => String(candidate.getAttr('fenceSetupName') || '').trim()).find(Boolean) || ''; const ids = new Set(choices.map((choice) => choice.id)); forEachNode((candidate) => { if (candidate && candidate.getAttr && candidate.getAttr('customType') === 'fenceChain' && ids.has(ensureFenceSetup(candidate))) candidate.setAttrs({ fenceSetupId: winner.id, fenceSetupName: name }); }); return winner.id;
   }
   function fenceBaseIsOwnedByNode(node, point) { const ownOrder = Number(node.getAttr('fenceRunOrder')) || Infinity; const ownId = String(node.getAttr('nodeId') || ''); let owner = { order: ownOrder, id: ownId }; forEachNode((candidate) => { if (!(candidate && candidate !== node && candidate.getAttr && candidate.getAttr('customType') === 'fenceChain')) return; if (!fenceWorldPoints(candidate).some((candidatePoint) => Math.hypot(candidatePoint.x - point.x, candidatePoint.y - point.y) < .01)) return; const next = { order: Number(candidate.getAttr('fenceRunOrder')) || Infinity, id: String(candidate.getAttr('nodeId') || '') }; if (next.order < owner.order || (next.order === owner.order && next.id < owner.id)) owner = next; }); return owner.order === ownOrder && owner.id === ownId; }
   function fenceBaseAngle(points, index) { const neighbor = points[index < points.length - 1 ? index + 1 : index - 1] || points[index]; const point = points[index]; return Math.atan2(neighbor.y - point.y, neighbor.x - point.x) * 180 / Math.PI; }
@@ -4590,7 +4578,7 @@ export function startLegacyPlanner() {
   function handleFencePoint(point, clickDetail = 1, undo = false) { if (!isFencePlacement() || !point) return false; if (undo) { fenceDraft.points.pop(); renderFenceDraft(worldGroup.getRelativePointerPosition()); return true; } if (clickDetail > 1) return finishFenceChain(); const snapped = snapPosition(point); if (!fenceDraft.points.length) { fenceDraft.points.push(fenceSharedBaseAt(snapped) || snapped); renderFenceDraft(point); return true; } const prior = fenceDraft.points[fenceDraft.points.length - 1]; const shared = fenceSharedBaseAt(snapped); const exact = shared && Math.abs(Math.hypot(prior.x - shared.x, prior.y - shared.y) / FEET_TO_PX - (Number(placementPayload.panelLengthFt) || 8)) <= .01; const endpoint = exact ? shared : fenceConstrainEndpoint(prior, snapped, Number(placementPayload.panelLengthFt) || 8); if (Math.hypot(prior.x - endpoint.x, prior.y - endpoint.y) > .01) fenceDraft.points.push(endpoint); renderFenceDraft(point); return true; }
   function resumeFenceChain(node) { if (!(node && node.getAttr && node.getAttr('customType') === 'fenceChain')) return; armPlacementTool({ kind: 'fenceChain', panelLengthFt: Number(node.getAttr('fencePanelLengthFt')) || 8, label: `${Number(node.getAttr('fencePanelLengthFt')) || 8} ft Fence Run` }, null); fenceDraft = { points: fenceWorldPoints(node), preview: null, node }; node.hide(); renderFenceDraft(worldGroup.getRelativePointerPosition() || fenceDraft.points[fenceDraft.points.length - 1]); showPlannerToast('Continue from the last fence base. Shift-click undoes the latest base; double-click finishes.'); }
 
-  function fenceDetails() { const chains = collectFenceChains(); const setups = new Map(); chains.forEach((chain) => { const id = ensureFenceSetup(chain.node); const setup = setups.get(id) || { id, order: Number(chain.node.getAttr('fenceSetupOrder')) || 0, chains: [] }; setup.chains.push(chain); setups.set(id, setup); }); return Array.from(setups.values()).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).map((setup, index) => ({ ...setup, displayName: `Fence Run ${index + 1}`, totals: fenceInventoryRows(setup.chains).rows })); }
+  function fenceDetails() { const chains = collectFenceChains(); const setups = new Map(); chains.forEach((chain) => { const id = ensureFenceSetup(chain.node); const setup = setups.get(id) || { id, order: Number(chain.node.getAttr('fenceSetupOrder')) || 0, chains: [] }; setup.chains.push(chain); setups.set(id, setup); }); return Array.from(setups.values()).sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).map((setup, index) => ({ ...setup, displayName: setup.chains.map((chain) => String(chain.node.getAttr('fenceSetupName') || '').trim()).find(Boolean) || `Fence Run ${index + 1}`, totals: fenceInventoryRows(setup.chains).rows })); }
 
   // These add-ons belong to individual tent legs. A click places one at the
   // nearest leg; dragging makes it practical to outfit a whole run of legs.
@@ -4792,6 +4780,7 @@ export function startLegacyPlanner() {
       }
     });
     if (!best || best.distance > 1) return false;
+    clearSelection(); selectedItems = [node]; updateTransformer();
     selectedCustomBistroString = { node, tent, stringIndex: best.stringIndex };
     if (customBistroStringHighlight) customBistroStringHighlight.destroy();
     const points = strings[best.stringIndex].flatMap((point) => [point.x * FEET_TO_PX, point.y * FEET_TO_PX]);
@@ -4967,6 +4956,45 @@ export function startLegacyPlanner() {
     }
     // The visible segment/circle is the hit target. Do not add a full-tent hit
     // surface here, or an attached add-on would block selecting the tent body.
+  }
+
+  function closeTentAddonEditor() { document.getElementById('tentAddonEditPopup')?.remove(); }
+
+  function editTentAddon(node) {
+    if (!isSelectableNode(node)) return;
+    const tent = getNodeById(node.getAttr('parentTentNodeId')); if (!tent) return;
+    closeTentAddonEditor();
+    clearSelection(); selectedItems = [node]; updateTransformer();
+    const type = node.getAttr('addonType');
+    const variants = inventoryDefinitionCache.filter((entry) => !entry.hiddenFromPanel && (entry.addonType || (entry.category === 'sidewall' ? 'sidewall' : entry.category === 'anchor' ? 'weight' : '')) === type);
+    const point = tentLocalPoint(tent, getNodeCenter(node));
+    const movable = !node.getAttr('tentAddonFixed');
+    const popup = document.createElement('div'); popup.id = 'tentAddonEditPopup'; popup.className = 'chair-rows-edit-popup';
+    popup.innerHTML = `<button type="button" class="chair-edit-close" aria-label="Close">×</button><div class="popup-title">Edit Tent Add-on</div><div class="chair-edit-grid"><label>Item<select data-addon-variant><option value="">${escapeHtml(node.getAttr('inventoryName') || type)}</option>${variants.filter((entry) => entry.name !== node.getAttr('inventoryName')).map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.name)}</option>`).join('')}</select></label>${movable ? `<label>X ft<input data-addon-x type="number" step=".25" value="${point.x.toFixed(2)}"></label><label>Y ft<input data-addon-y type="number" step=".25" value="${point.y.toFixed(2)}"></label>` : ''}</div><div class="small text-muted mt-2">${movable ? 'Position follows the existing tent edge or leg snapping. You can also drag the add-on.' : 'This light layout follows the tent dimensions.'}</div><div class="chair-edit-actions"><button type="button" class="btn btn-outline-danger btn-sm" data-addon-delete>Remove</button><button type="button" class="btn btn-primary btn-sm" data-addon-save>Save &amp; Exit</button></div>`;
+    document.body.appendChild(popup); centerInlineEditorPopup(popup);
+    popup.querySelector('[data-addon-variant]').parentElement.style.gridColumn = '1 / -1';
+    popup.querySelector('[data-addon-variant]').style.width = '100%';
+    popup.querySelector('.chair-edit-close').addEventListener('click', closeTentAddonEditor);
+    popup.querySelector('[data-addon-delete]').addEventListener('click', () => {
+      if (!isSelectableNode(node)) return;
+      clearSelection(); selectedItems = [node]; handleDelete(); closeTentAddonEditor();
+    });
+    popup.querySelector('[data-addon-save]').addEventListener('click', () => {
+      if (!isSelectableNode(node)) { closeTentAddonEditor(); return; }
+      const variant = variants.find((entry) => entry.id === popup.querySelector('[data-addon-variant]').value);
+      const local = movable ? { x: Number(popup.querySelector('[data-addon-x]').value), y: Number(popup.querySelector('[data-addon-y]').value) } : point;
+      if (!Number.isFinite(local.x) || !Number.isFinite(local.y)) return;
+      const world = tentLegWorldPoint(tent, [local.x, local.y]);
+      if (variant) {
+        const replacement = createTentAddonNode({ ...variant, addonType: type, inventoryName: variant.name }, tent, world);
+        replacement.setAttr('nodeId', node.getAttr('nodeId'));
+        setNodeLayerId(replacement, node.getAttr('layerId'));
+        const parent = node.getParent(), index = node.zIndex();
+        parent.add(replacement); replacement.zIndex(index); node.destroy(); node = replacement;
+      } else if (movable && (Math.abs(local.x - point.x) > .02 || Math.abs(local.y - point.y) > .02)) updateTentAddonAttachmentFromPoint(node, world);
+      syncAttachedLabelsForNode(node); selectedItems = [node]; syncLayerNodeState(); updateTransformer();
+      refreshInventoryPanelUI(); renderLayersPanel(); worldLayer.draw(); setDirty(true); closeTentAddonEditor();
+    });
   }
 
   function fanAttachmentForPlacement(tent, worldPoint, fanWidthFt, fanLengthFt, freePlacement = false) {
@@ -5205,6 +5233,7 @@ export function startLegacyPlanner() {
     requestLabelText('Edit label', attached ? 'This label stays connected to its item or venue.' : 'This standalone label remains at its canvas position.', targetLabel.getAttr('labelText') || '', (submitted) => {
       const text = String(submitted || '').trim(); if (!text) return;
       targetLabel.setAttr('labelText', text);
+      targetLabel.setAttrs({ autoGenerated: false, labelKind: '' });
       const textNode = targetLabel.findOne('.labelText');
       if (textNode) textNode.text(text);
       applyLabelAppearance(targetLabel, labelAppearanceFromInputs()); if (attached) syncAttachedLabelsForNode(getNodeById(targetLabel.getAttr('attachedToNodeId')));
@@ -5531,7 +5560,16 @@ export function startLegacyPlanner() {
 
     if (payload.kind === 'groupedSeating') {
       const preview = createGroupedSeatingLayout(payload.groupedConfig, { preview: true });
-      if (preview) preview.setAttrs({ opacity: .55, listening: false, draggable: false, name: 'groupedSeatingPlacementPreview' });
+      if (preview) {
+        preview.setAttrs({ opacity: .55, listening: false, draggable: false, name: 'groupedSeatingPlacementPreview' });
+        // Geometry stays unchanged while moving: draw the real chairs once,
+        // then move the cached image instead of repainting every seat.
+        const bounds = preview.getClientRect({ skipTransform: true });
+        if (bounds.width > 0 && bounds.height > 0) {
+          const pixelRatio = Math.min(2, 4096 / Math.max(bounds.width, bounds.height));
+          preview.cache({ pixelRatio, hitCanvasPixelRatio: pixelRatio });
+        }
+      }
       return preview;
     }
 
@@ -6902,6 +6940,11 @@ export function startLegacyPlanner() {
       const tg = document.activeElement;
       const tag = tg && tg.tagName ? tg.tagName.toUpperCase() : '';
       const editable = tg && (tg.isContentEditable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (!document.body.classList.contains('print-mode') && printPreferencesModal?.style.display !== 'flex') openPrintPreferences();
+        return;
+      }
       if (e.key === 'Shift') {
         shiftPressed = true;
         if (!editable && snapToGrid) {
@@ -7056,17 +7099,20 @@ export function startLegacyPlanner() {
     const filtered = selectedItems.filter((shape) => isSelectableNode(shape));
     selectedItems = filtered;
     transformer.nodes(filtered);
+    // Single objects already have hit surfaces. The transformer backdrop must
+    // not swallow clicks on doors, labels, or add-ons above a selected parent.
+    transformer.shouldOverdrawWholeArea(filtered.length > 1);
+    transformer.findOne('.back')?.listening(filtered.length > 1);
     const selectedReference = filtered.length === 1 && filtered[0].getAttr && filtered[0].getAttr('customType') === 'referenceImage';
-    const selectedSidewall = filtered.length === 1 && filtered[0].getAttr && filtered[0].getAttr('customType') === 'tentAddon' && filtered[0].getAttr('addonType') === 'sidewall';
-    const selectedAttachedLabel = filtered.length === 1 && filtered[0].getAttr && filtered[0].getAttr('customType') === 'label' && filtered[0].getAttr('labelMode') === 'attached';
     transformer.resizeEnabled(selectedReference);
     transformer.keepRatio(selectedReference);
     transformer.enabledAnchors(selectedReference ? ['top-left', 'top-right', 'bottom-left', 'bottom-right'] : []);
     const selectedStageAddon = filtered.some((node) => node.getAttr('customType') === 'stageAddon');
-    transformer.rotateEnabled(!selectedSidewall && !selectedAttachedLabel && !selectedStageAddon);
+    transformer.rotateEnabled(!filtered.some((node) => node.getAttr('customType') === 'tentAddon') && !selectedStageAddon);
     updateRotationSnap();
     hideLabelGear();
     updateToolButtons();
+    if (filtered.length === 1 && filtered[0].getAttr('customType') === 'label') showLabelGearForNode(filtered[0]);
     worldLayer.draw();
   }
 
@@ -7225,6 +7271,7 @@ export function startLegacyPlanner() {
           rotation,
           attachedToNodeId: src.getAttr('attachedToNodeId') || null,
           attachmentOffset: cloneConfig(src.getAttr('attachmentOffset') || null),
+          attachmentRotation: Number(src.getAttr('attachmentRotation')) || 0,
           fontSize: src.getAttr('fontSize'),
           labelColor: src.getAttr('labelColor'),
           fontStyle: src.getAttr('fontStyle'),
@@ -8898,6 +8945,11 @@ export function startLegacyPlanner() {
 
     shape.on('transformend', () => {
       hideLabelGear();
+      if (shape.getAttr('labelMode') === 'attached') {
+        const parent = getNodeById(shape.getAttr('attachedToNodeId'));
+        if (parent) shape.setAttr('attachmentRotation', shape.rotation() - parent.rotation());
+        syncAttachedLabelOffset(shape);
+      }
       if (isStandaloneBistroRun(shape)) finalizeStandaloneLightRunTransform(shape);
       if (isLightPost(shape)) syncBistroRunsForPosts([shape]);
       syncAttachedLabelsForNode(shape);
@@ -9855,6 +9907,7 @@ export function startLegacyPlanner() {
           nodeId: ensureNodeId(shape, 'label'),
           attachedToNodeId: shape.getAttr('attachedToNodeId') || null,
           attachmentOffset: cloneConfig(shape.getAttr('attachmentOffset') || null),
+          attachmentRotation: Number(shape.getAttr('attachmentRotation')) || 0,
           fontSize: shape.getAttr('fontSize'),
           labelColor: shape.getAttr('labelColor'),
           fontStyle: shape.getAttr('fontStyle'),
@@ -9905,7 +9958,7 @@ export function startLegacyPlanner() {
         return;
       }
       if (shape.getAttr && shape.getAttr('customType') === 'fenceChain') {
-        layout.items.push({ type: 'fenceChain', itemKind: 'fence_chain', points: fenceWorldPoints(shape), panelLengthFt: shape.getAttr('fencePanelLengthFt'), fenceSetupId: ensureFenceSetup(shape), fenceSetupOrder: shape.getAttr('fenceSetupOrder'), fenceRunOrder: shape.getAttr('fenceRunOrder'), layerId: layer.id, nodeId: ensureNodeId(shape, 'fence') });
+        layout.items.push({ type: 'fenceChain', itemKind: 'fence_chain', points: fenceWorldPoints(shape), panelLengthFt: shape.getAttr('fencePanelLengthFt'), fenceSetupId: ensureFenceSetup(shape), fenceSetupName: shape.getAttr('fenceSetupName') || '', fenceSetupOrder: shape.getAttr('fenceSetupOrder'), fenceRunOrder: shape.getAttr('fenceRunOrder'), layerId: layer.id, nodeId: ensureNodeId(shape, 'fence') });
         return;
       }
       if (shape.getAttr && shape.getAttr('isFlooring')) {
@@ -10090,11 +10143,17 @@ export function startLegacyPlanner() {
         return;
       }
       plannerLibraryList.innerHTML = items.map((item) => `
-        <button class="planner-library-item" type="button" data-floorplan-id="${item.id}">
-          <div class="planner-library-item-title">${item.title || 'Untitled planner'}</div>
+        <div class="d-flex align-items-center gap-1">
+        <button class="planner-library-item flex-grow-1" type="button" data-floorplan-id="${escapeHtml(String(item.id))}" title="Open planner to edit">
+          <div class="planner-library-item-title">${escapeHtml(item.title || 'Untitled planner')}</div>
           <div class="planner-library-item-meta">Updated ${formatTimestamp(item.updated_at) || 'Unknown time'}</div>
         </button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" data-rename-floorplan-id="${escapeHtml(String(item.id))}" title="Rename planner"><i class="fa-solid fa-pen"></i></button>
+        <button class="btn btn-outline-danger btn-sm" type="button" data-delete-floorplan-id="${escapeHtml(String(item.id))}" title="Delete saved planner" aria-label="Delete saved planner"><i class="fa-solid fa-trash"></i></button>
+        </div>
       `).join('');
+      plannerLibraryList.querySelectorAll('[data-rename-floorplan-id]').forEach((btn) => btn.addEventListener('click', () => renameSavedPlanner(Number(btn.dataset.renameFloorplanId))));
+      plannerLibraryList.querySelectorAll('[data-delete-floorplan-id]').forEach((btn) => btn.addEventListener('click', () => deleteSavedPlanner(Number(btn.dataset.deleteFloorplanId))));
       plannerLibraryList.querySelectorAll('[data-floorplan-id]').forEach((btn) => {
         btn.addEventListener('click', () => {
           const documentId = parseInt(btn.getAttribute('data-floorplan-id'), 10);
@@ -10107,10 +10166,42 @@ export function startLegacyPlanner() {
   }
 
   function renamePlanner() {
+    if (currentDocumentId) { renameSavedPlanner(currentDocumentId); return; }
     const prompted = window.prompt('Planner name', currentDocumentTitle || 'Untitled planner');
     if (prompted === null) return;
     currentDocumentTitle = prompted.trim() || 'Untitled planner';
     setDirty(true);
+  }
+
+  function deleteSavedPlanner(documentId) {
+    try {
+      const saved = localDocuments().find((item) => item.id === documentId);
+      if (!saved) { openPlannerLibrary(); return; }
+      const isCurrent = currentDocumentId === documentId;
+      const message = `Delete saved planner "${saved.title || 'Untitled planner'}" from this browser? This cannot be undone.${isCurrent ? '\n\nThe open layout will stay on the canvas as an unsaved planner.' : ''}`;
+      if (!window.confirm(message)) return;
+      writeLocalDocuments(localDocuments().filter((item) => item.id !== documentId));
+      if (isCurrent) {
+        resetCurrentDocument({ id: null, title: currentDocumentTitle, updatedAt: null, dirty: true });
+        setQueryDocumentId(null);
+      }
+      openPlannerLibrary();
+    } catch (err) {
+      window.alert(`Could not delete saved planner: ${err.message}`);
+    }
+  }
+
+  function renameSavedPlanner(documentId) {
+    const items = localDocuments();
+    const saved = items.find((item) => item.id === documentId); if (!saved) return;
+    const prompted = window.prompt('Planner name', saved.title || 'Untitled planner');
+    if (prompted === null) return;
+    saved.title = prompted.trim() || 'Untitled planner';
+    saved.updated_at = new Date().toISOString();
+    try { writeLocalDocuments(items); }
+    catch (err) { window.alert(`Could not rename planner: ${err.message}`); return; }
+    if (currentDocumentId === documentId) { currentDocumentTitle = saved.title; currentDocumentUpdatedAt = saved.updated_at; renderPlannerMeta(); }
+    if (plannerLibraryPanel && plannerLibraryPanel.style.display !== 'none') openPlannerLibrary();
   }
 
   function toggleLayersPanel() {
@@ -10122,6 +10213,7 @@ export function startLegacyPlanner() {
   }
 
   async function loadLayout(json) {
+    closeTentAddonEditor();
     const restoreSelection = plannerHistoryApplying ? selectedItems.map((node) => node.getAttr('nodeId')) : [];
     const restoreActiveLayer = activeLayerId;
     hideTableSeatingEditPopup(); closeChairRowsEditPopup(); closeRoomAttachmentPopup();
@@ -10295,7 +10387,7 @@ export function startLegacyPlanner() {
               const node = createFenceChain({ panelLengthFt: Number(it.panelLengthFt) || 8 }, points);
               if (it.nodeId) node.setAttr('nodeId', it.nodeId);
               const order = Number(it.fenceSetupOrder) || Number(it.fenceRunOrder) || fenceSetupCounter;
-              node.setAttrs({ fenceSetupId: it.fenceSetupId || node.getAttr('fenceSetupId'), fenceSetupOrder: order, fenceRunOrder: Number(it.fenceRunOrder) || order });
+              node.setAttrs({ fenceSetupId: it.fenceSetupId || node.getAttr('fenceSetupId'), fenceSetupName: it.fenceSetupName || '', fenceSetupOrder: order, fenceRunOrder: Number(it.fenceRunOrder) || order });
               fenceSetupCounter = Math.max(fenceSetupCounter, order); setNodeLayerId(node, layerId); targetGroup.add(node);
             }
           } else if (it.itemKind === 'label' || it.type === 'label') {
@@ -10306,6 +10398,7 @@ export function startLegacyPlanner() {
               rotation: it.rotation || 0,
               attachedToNodeId: it.attachedToNodeId || null,
               attachmentOffset: cloneConfig(it.attachmentOffset || null),
+              attachmentRotation: Number(it.attachmentRotation) || 0,
               fontSize: it.fontSize,
               labelColor: it.labelColor,
               fontStyle: it.fontStyle,
@@ -10385,14 +10478,14 @@ export function startLegacyPlanner() {
   function hasSelectedPrintInfo() { return printSectionDefinitions.some((section) => section.enabled()); }
 
   function shouldUseSetupLegendBottom(orientation) {
-    const setupMapSelected = !!(printLayoutMapOnly && printLayoutMapOnly.checked);
-    return setupMapSelected && orientation === 'portrait' && hasSelectedPrintInfo();
+    // Setup maps keep their optional key floating in either orientation.
+    return false;
   }
 
   function shouldPrintSetupLegendPage(orientation) {
     const setupMapSelected = !!(printLayoutMapOnly && printLayoutMapOnly.checked);
     const requested = printSetupLegendPage ? !!printSetupLegendPage.checked : printSetupLegendPagePreference;
-    if (!setupMapSelected || orientation === 'portrait' || !requested) return false;
+    if (!setupMapSelected || !requested) return false;
     return hasSelectedPrintInfo();
   }
 
@@ -10421,7 +10514,7 @@ export function startLegacyPlanner() {
     if (printSectionPicker) printSectionPicker.style.display = '';
     const sectionTitle = document.getElementById('printSectionPickerTitle');
     if (sectionTitle) sectionTitle.textContent = isMapKey ? 'Include in Event Plan Info' : 'Include in Setup Map';
-    if (printSetupLegendPage) printSetupLegendPage.parentElement.style.display = isMapKey || orientation === 'portrait' ? 'none' : '';
+    if (printSetupLegendPage) printSetupLegendPage.parentElement.style.display = isMapKey ? 'none' : '';
     if (printPreferencesStatus) {
       printPreferencesStatus.textContent = isMapKey
         ? 'Event Plan Info keeps the map and selected event details together.'
@@ -10438,53 +10531,14 @@ export function startLegacyPlanner() {
 
   function restorePrintKeyContinuation() {
     if (!printKeyContent || !printKeyPageContent) return;
-    if (printKeyContent.parentElement === printKeyPageContent && printKeySidebar) printKeySidebar.appendChild(printKeyContent);
-    Array.from(printKeyPageContent.children).filter((section) => section !== printKeyContent).forEach((section) => printKeyContent.appendChild(section));
+    printLayout.querySelectorAll('.print-generated-page').forEach((page) => page.remove());
+    printKeyContent.replaceChildren(...canonicalPrintSections());
+    printKeyPageContent.replaceChildren();
+    printKeyContent.classList.remove('print-paginated-content');
+    printKeyContent.style.removeProperty('width'); printKeyContent.style.removeProperty('height');
+    if (printKeySidebar) printKeySidebar.appendChild(printKeyContent);
   }
 
-  function splitPrintKeyContinuation(layout, samePage) {
-    restorePrintKeyContinuation();
-    if (!samePage || !['side-key', 'stacked-key'].includes(layout) || !printKeyContent || !printKeyPageContent) return false;
-    const visibleSections = Array.from(printKeyContent.children).filter((section) => section.style.display !== 'none');
-    const canonicalSections = [
-      printInventorySummaryEl,
-      printTentSetupSummaryEl,
-      printPipeDrapeSummaryEl,
-      printFenceRunsSummaryEl,
-      printLightRunsSummaryEl,
-      printFlooringSummaryEl,
-      printSeatingSummaryEl,
-      printNotesSummaryEl,
-    ].filter(Boolean);
-    const orderedSections = [
-      ...canonicalSections.filter((section) => visibleSections.includes(section)),
-      ...visibleSections.filter((section) => !canonicalSections.includes(section)),
-    ];
-    const inventorySection = orderedSections.find((section) => section.id === 'printInventorySummary');
-    if (!orderedSections.length) return false;
-    orderedSections.forEach((section) => printKeyContent.appendChild(section));
-    const firstPagePanel = layout === 'side-key' ? printKeySidebar : printKeyBelow;
-    if (!firstPagePanel || !firstPagePanel.clientHeight) return false;
-    const continuation = layout === 'stacked-key'
-      ? (() => {
-        // Portrait packs complete table rows down each column before using
-        // the next column. Once a section crosses either panel edge, that
-        // section and every following section continue together.
-        const panelBounds = firstPagePanel.getBoundingClientRect();
-        const firstOverflowIndex = orderedSections.findIndex((section) => {
-          const sectionBounds = section.getBoundingClientRect();
-          return sectionBounds.bottom > panelBounds.bottom + 1 || sectionBounds.right > panelBounds.right + 1;
-        });
-        return firstOverflowIndex < 0 ? [] : orderedSections.slice(firstOverflowIndex);
-      })()
-      : (() => {
-        const availableHeight = firstPagePanel.clientHeight;
-        return orderedSections.filter((section) => section !== inventorySection && section.offsetTop + section.offsetHeight > availableHeight);
-    })();
-    if (!continuation.length) return false;
-    continuation.forEach((section) => printKeyPageContent.appendChild(section));
-    return true;
-  }
 
   function mountPrintKey(layout, setupLegendBottom = false) {
     if (!printKeyContent) return;
@@ -10524,13 +10578,21 @@ export function startLegacyPlanner() {
     if (printLayout) printLayout.classList.remove('print-layout-map-only', 'print-layout-side-key', 'print-layout-stacked-key', 'print-layout-key-pages', 'print-orientation-landscape', 'print-orientation-portrait', 'print-has-key', 'print-has-key-continuation', 'print-setup-legend-bottom', 'print-has-setup-legend-page');
   }
 
+  function canonicalPrintSections() {
+    return [printInventorySummaryEl, printTentSetupSummaryEl, printPipeDrapeSummaryEl, printFenceRunsSummaryEl, printLightRunsSummaryEl, printFlooringSummaryEl, printSeatingSummaryEl, printNotesSummaryEl].filter(Boolean);
+  }
+
   function splitPrintKeyForLetterPage(layout, samePage) {
-    if (!samePage || !['side-key', 'stacked-key'].includes(layout) || !printLayout) return false;
+    if (!printLayout) return false;
     document.body.classList.add('print-preview-measure');
-    void printLayout.offsetHeight;
-    const hasContinuation = splitPrintKeyContinuation(layout, samePage);
-    document.body.classList.remove('print-preview-measure');
-    return hasContinuation;
+    try {
+      return paginatePrintTables({
+        root: printLayout, content: printKeyContent, pageContent: printKeyPageContent,
+        sources: canonicalPrintSections(), layout,
+        setupLegendBottom: printLayout.classList.contains('print-setup-legend-bottom'),
+        setupLegendPage: printLayout.classList.contains('print-has-setup-legend-page'),
+      }) > 0;
+    } finally { document.body.classList.remove('print-preview-measure'); }
   }
 
   function preparePreviewPrintPages(layout, orientation, samePage, hasKey, setupLegendBottom = false, setupLegendPage = false) {
@@ -10541,6 +10603,8 @@ export function startLegacyPlanner() {
     // Clone the already-paginated print sheet itself. The modal must never
     // reconstruct tables into a separate preview-only page structure.
     const previewLayout = printLayout.cloneNode(true);
+    // A cloned @page rule would override the real orientation at print time.
+    previewLayout.querySelectorAll('style').forEach((style) => style.remove());
     previewLayout.removeAttribute('id');
     previewLayout.classList.add('print-preview-layout');
     clearPreviewPrintLayoutState();
@@ -10566,28 +10630,28 @@ export function startLegacyPlanner() {
     const pages = preparePreviewPrintPages(layout, orientation, samePage, hasKey, setupLegendBottom, setupLegendPage);
     printPreview.replaceChildren();
     if (pages.previewLayout) printPreview.appendChild(pages.previewLayout);
+    if (pages.previewLayout) {
+      const pageWidth = (orientation === 'portrait' ? 208 : 271) * 96 / 25.4;
+      pages.previewLayout.style.zoom = String(Math.min(1, Math.max(.1, (printPreview.clientWidth - 26) / pageWidth)));
+    }
     const referenceNodes = worldLayer ? worldLayer.find('.referenceUnderlay') : [];
     const uiWasVisible = !!(uiGroup && uiGroup.visible && uiGroup.visible());
     try {
-      referenceNodes.forEach((node) => node.hide());
+      referenceNodes.forEach((node) => { node.setAttr('printPreviousVisibility', node.visible()); node.hide(); });
       if (uiGroup) uiGroup.hide();
       const previewImage = pages.previewLayout && pages.previewLayout.querySelector('#printImage');
       if (previewImage) previewImage.src = stage ? stage.toDataURL({ pixelRatio: 1, mimeType: 'image/png' }) : '';
     } catch (error) {
       console.error('Could not build print preview:', error);
     } finally {
-      referenceNodes.forEach((node) => node.show());
+      referenceNodes.forEach((node) => { node.visible(node.getAttr('printPreviousVisibility')); node.setAttr('printPreviousVisibility', undefined); });
       if (uiGroup && uiWasVisible) uiGroup.show();
       if (worldLayer) worldLayer.batchDraw();
     }
     requestAnimationFrame(() => {
       if (!printPreviewStatus) return;
-      if (pages.hasContinuation) {
-        const rows = pages.previewLayout ? pages.previewLayout.querySelectorAll('.print-key-page-content tbody tr').length : 0;
-        printPreviewStatus.textContent = `Page 1 plus Event Plan Info continuation (${rows} rows on the next page).`;
-      } else {
-        printPreviewStatus.textContent = `${orientation === 'portrait' ? 'Portrait' : 'Landscape'} preview fits on one sheet.`;
-      }
+      const sheetCount = pages.previewLayout ? Array.from(pages.previewLayout.querySelectorAll('.print-sheet')).filter((sheet) => getComputedStyle(sheet).display !== 'none').length : 0;
+      printPreviewStatus.textContent = `${orientation === 'portrait' ? 'Portrait' : 'Landscape'} preview: ${sheetCount} ${sheetCount === 1 ? 'sheet' : 'sheets'}.`;
     });
   }
 
@@ -10616,6 +10680,11 @@ export function startLegacyPlanner() {
   }
 
   function renderPrintKeyContent(printAll = false) {
+    // Restore the canonical sections before any render or orientation change.
+    printLayout.querySelectorAll('.print-generated-page').forEach((page) => page.remove());
+    printKeyContent.replaceChildren(...canonicalPrintSections());
+    printKeyContent.classList.remove('print-paginated-content');
+    printKeyContent.style.removeProperty('width'); printKeyContent.style.removeProperty('height');
     const selected = document.querySelector('input[name="printLayoutMode"]:checked');
     const requestedLayout = printAll ? 'map-key' : (selected ? selected.value : printLayoutPreference);
     const setupLegendEnabled = printSetupLegend ? !!printSetupLegend.checked : printSetupLegendPreference;
@@ -10666,7 +10735,6 @@ export function startLegacyPlanner() {
       renderPrintChairRowsSummary();
       renderPrintNotesSummary();
       const orientation = (document.querySelector('input[name="printOrientation"]:checked') || {}).value || printOrientationPreference;
-      if (requestedLayout === 'map-key' && orientation === 'portrait') renderPortraitEventPlanStream();
     } finally {
       if (printAll) {
         inventoryShowOnPrint = savedPrintInfo.inventory;
@@ -10716,20 +10784,31 @@ export function startLegacyPlanner() {
       requestAnimationFrame(() => {
         const cleanup = () => { document.body.classList.remove('print-mode'); printLayout.classList.remove('print-has-key-continuation'); printImageEl.removeAttribute('src'); restorePrintKeyContinuation(); if (printKeySidebar && printKeyContent) printKeySidebar.appendChild(printKeyContent); window.removeEventListener('afterprint', cleanup); };
         window.addEventListener('afterprint', cleanup);
-        requestAnimationFrame(() => { window.print(); setTimeout(cleanup, 1000); });
+        // Keep the prepared document alive until the browser closes printing.
+        // A timer can erase the image while a nonblocking print dialog is open.
+        Promise.all(Array.from(printLayout.querySelectorAll('img')).map((image) => image.decode().catch(() => {})))
+          .then(() => document.fonts.ready)
+          .then(() => requestAnimationFrame(() => { try { window.print(); } catch (error) { cleanup(); showPlannerToast('Printing could not be opened. Please try again.'); } }));
       });
     };
     const referenceNodes = worldLayer.find('.referenceUnderlay');
     const uiWasVisible = !!(uiGroup && uiGroup.visible && uiGroup.visible());
     try {
-      referenceNodes.forEach((node) => node.hide());
+      referenceNodes.forEach((node) => { node.setAttr('printPreviousVisibility', node.visible()); node.hide(); });
       if (uiGroup) uiGroup.hide();
       const dataUrl = stage.toDataURL({ pixelRatio: Math.max(2, window.devicePixelRatio || 1), mimeType: 'image/png' });
       printImageEl.onload = () => { printImageEl.onload = null; finalizePrint(); };
       printImageEl.src = dataUrl;
-    } catch (err) { console.error('Could not build print snapshot:', err); window.print(); }
+    } catch (err) {
+      console.error('Could not build print snapshot:', err);
+      printImageEl.onload = null;
+      printImageEl.removeAttribute('src');
+      restorePrintKeyContinuation();
+      printLayout.classList.remove('print-has-key-continuation');
+      showPlannerToast('The print image could not be prepared. Please try again.');
+    }
     finally {
-      referenceNodes.forEach((node) => node.show());
+      referenceNodes.forEach((node) => { node.visible(node.getAttr('printPreviousVisibility')); node.setAttr('printPreviousVisibility', undefined); });
       if (uiGroup && uiWasVisible) uiGroup.show();
       if (worldLayer) worldLayer.batchDraw();
     }

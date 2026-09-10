@@ -34,6 +34,8 @@ Plans save in the current browser. Use **Export JSON** to move or back up a plan
 - **Save planner** stores the current plan in this browser's local planner library.
 - **Open planner** opens a saved local plan.
 - **Rename planner** changes the name of the current local plan.
+- The pencil beside a saved planner in **Open planner** renames it without opening or overwriting its saved layout.
+- Click a saved planner's name to open and edit its layout, then use **Save planner** to save changes. The trash button removes that saved planner from this browser after confirmation. Deletion cannot be undone; if it is currently open, its canvas stays available as an unsaved planner that you can save again.
 - **Export JSON** downloads the current plan as a portable JSON file. Use this for backups and transfers between browsers or installations.
 - **Import JSON** loads a previously exported plan. Export the current plan first if you need to preserve it.
 - **My Inventory → Export** saves custom inventory and custom venues as JSON.
@@ -50,6 +52,8 @@ Exported JSON files may contain the plan, labels, custom geometry, reference-ima
 - **Undo / Redo**: reverse or restore recent changes.
 - **Layers**: add, reorder, hide, lock, or adjust item and venue layers.
 - **Labels**: add free labels or labels attached to an item.
+
+Double-click a placed label, or select it and use its gear, to edit the text. Attached labels can use the rotation handle too; their chosen angle follows the parent and survives saving.
 
 For touch placement, move the preview first and confirm it at the preview location. Attached add-ons stay constrained to their parent venue or stage.
 
@@ -88,6 +92,8 @@ The same editor supports half-round tables and their attached chair layout. Simi
 
 Tent add-ons use the tent as their placement boundary. Sidewalls follow tent edges; leg-based items attach to legs; signs follow the perimeter; chandeliers stay inside the tent. Move an existing add-on to edit its attachment without moving it freely across the canvas.
 
+Double-click a tent add-on to change its available variant or position, or use **Remove** in its editor. Custom bistro strings retain their double-click continuation workflow; select a string and use Delete to remove it.
+
 Use the bookmark tool with one tent selected to save its tent and attached add-ons as a reusable setup.
 
 ## Flooring and stage add-ons
@@ -99,6 +105,7 @@ After placing a stage, choose Basic Step, Adjustable Stairs, or railings from th
 ## Runs and reference images
 
 - **Pipe & Drape**, fencing, and standalone light runs are drawn as connected runs. Follow the controls shown by the selected tool to add points, finish, or resume a run.
+- Use **4 ft Fence Run** or **8 ft Fence Run** for fencing, including single panels. The pencil in the Inventory Key renames a run for saved plans and printed details.
 - **Reference Image** is added from **Layers**. In the reference setup window, use the degree rotation control to align the image to the grid, set its scale manually when needed, and adjust opacity before applying it. Keep it locked behind the plan after positioning it.
 
 ## Inventory Key and printing
@@ -111,6 +118,8 @@ Open **Print planner** from the file menu. Choose:
 - **Event Plan Info** for the map plus selected setup details.
 
 Choose landscape or portrait, add an optional sub-label and notes, check the preview, then use **Print / Save PDF**.
+
+Ctrl+P (Command+P on macOS) opens the same print settings. Reports that exceed the available space continue on additional sheets; the preview shows the same measured pages used for printing.
 
 ## Quick recovery
 

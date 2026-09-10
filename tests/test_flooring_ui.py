@@ -259,36 +259,22 @@ def test_event_info_print_uses_one_compact_table_flow_and_repeating_count_header
     assert 'thead><tr class="print-event-count-title"' in markup
 
 
-def test_event_info_keeps_same_page_side_key_before_using_continuation_pages():
+def test_event_info_uses_measured_table_pagination_for_both_orientations():
     source = planner_source()
-    assert "if (samePage && printKeyNeedsSeparatePages())" not in source
+    pagination = Path("app/static/js/planner/features/print/pagination.js").read_text()
+    assert "paginatePrintTables({" in source
+    assert "column.scrollHeight > column.clientHeight + 1" in pagination
+    assert "head.cloneNode(true)" in pagination
+    assert "print-generated-page" in pagination
     assert "layout: samePage ? (orientation === 'portrait' ? 'stacked-key' : 'side-key') : 'key-pages'" in source
-    assert "function splitPrintKeyContinuation(layout, samePage)" in source
-    assert "const availableHeight = firstPagePanel.clientHeight;" in source
-    assert "section.offsetTop + section.offsetHeight > availableHeight" in source
-    assert "function splitPrintKeyForLetterPage(layout, samePage)" in source
 
 
-def test_portrait_print_split_keeps_the_first_three_tables_in_sequence():
+def test_print_orientation_changes_restore_original_sections_and_do_not_clone_page_rules():
     source = planner_source()
-    css = Path("app/static/css/styles.css").read_text()
-    assert "const continuation = layout === 'stacked-key'" in source
-    assert "const canonicalSections = [" in source
-    assert "printFlooringSummaryEl," in source
-    assert "printSeatingSummaryEl," in source
-    assert "printNotesSummaryEl," in source
-    assert "const panelBounds = firstPagePanel.getBoundingClientRect();" in source
-    assert "sectionBounds.bottom > panelBounds.bottom + 1 || sectionBounds.right > panelBounds.right + 1" in source
-    assert "return firstOverflowIndex < 0 ? [] : orderedSections.slice(firstOverflowIndex);" in source
-    assert ".print-layout-stacked-key .print-key-below .print-key-content { display: flex; flex-direction: column; flex-wrap: wrap;" in css
-    assert ".print-layout-stacked-key .print-key-below .print-key-content > .print-inventory-summary { flex: 0 0 auto; width: 48mm; max-width: 48mm; }" in css
-    assert "function fitPortraitPrintKeyPanel(layout)" not in source
-    assert ".print-layout-stacked-key .print-map-content .print-sheet-body { flex: 1 1 50%;" in css
-    assert ".print-layout-stacked-key.print-has-key-continuation.print-orientation-portrait .print-key-page-content { display: flex; flex-direction: column; flex-wrap: wrap;" in css
-    assert ".print-layout-stacked-key.print-has-key-continuation.print-orientation-portrait .print-key-page-content > .print-inventory-summary { flex: 0 0 auto; width: 48mm; max-width: 48mm; }" in css
-    assert "const hasContinuation = splitPrintKeyForLetterPage(layout, samePage);" in source
-    assert "if (hasContinuation) printLayout.classList.add('print-has-key-continuation');" in source
-    assert "printKeyPageContent.appendChild(section)" in source
+    assert "printKeyContent.replaceChildren(...canonicalPrintSections());" in source
+    assert "renderPortraitEventPlanStream" not in source
+    assert "previewLayout.querySelectorAll('style').forEach((style) => style.remove());" in source
+    assert "setTimeout(cleanup, 1000)" not in source
 
 
 def test_print_preview_clones_the_actual_paginated_print_layout():

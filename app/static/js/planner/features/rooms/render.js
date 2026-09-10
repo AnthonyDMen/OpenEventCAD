@@ -34,13 +34,14 @@ export function renderRoomAttachments(ctx, room) {
     const half = width * pixelsPerFoot / 2;
     const marker = new Konva.Group({ x: point.x * pixelsPerFoot, y: point.y * pixelsPerFoot, rotation: Math.atan2(wall.dy, wall.dx) * 180 / Math.PI, draggable: activeTool === 'select', name: 'roomAttachment' });
     marker.setAttr('attachmentId', attachment.id);
-    marker.add(new Konva.Line({ points: [-half, 0, half, 0], stroke: '#fff', strokeWidth: 8, lineCap: 'round' }));
-    marker.add(new Konva.Line({ points: [-half, 0, half, 0], stroke: attachment.type === 'door' ? '#198754' : '#f59e0b', strokeWidth: 4, lineCap: 'round' }));
+    marker.add(new Konva.Line({ points: [-half, 0, half, 0], stroke: '#fff', strokeWidth: 8, hitStrokeWidth: 20, lineCap: 'round' }));
+    marker.add(new Konva.Line({ points: [-half, 0, half, 0], stroke: attachment.type === 'door' ? '#198754' : '#f59e0b', strokeWidth: 4, hitStrokeWidth: 20, lineCap: 'round' }));
     if (attachment.type === 'door') {
       const interior = roomWallInteriorSide(component);
       const side = attachment.swing === 'outward' ? -interior : interior;
-      marker.add(new Konva.Arc({ x: 0, y: 0, innerRadius: half, outerRadius: half, angle: 90, rotation: side > 0 ? 45 : -135, stroke: '#198754', strokeWidth: 2 }));
+      marker.add(new Konva.Arc({ x: 0, y: 0, innerRadius: half, outerRadius: half, angle: 90, rotation: side > 0 ? 45 : -135, stroke: '#198754', strokeWidth: 2, hitStrokeWidth: 20 }));
     }
+    marker.on('mousedown touchstart', (event) => { event.cancelBubble = true; ctx.clearSelection?.(); });
     marker.dragBoundFunc((position) => {
       const constrained = constrainRoomAttachmentDrag(room, component, attachment, attachments, position);
       return constrained ? constrained.absolutePosition : marker.getAbsolutePosition();

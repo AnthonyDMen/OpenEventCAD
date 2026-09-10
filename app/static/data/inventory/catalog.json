@@ -306,6 +306,7 @@
         },
         {
           "id": "fence_panel_4x3",
+          "hiddenFromPanel": true,
           "name": "Fence Panel 4' x 3'",
           "type": "item",
           "category": "fence",
@@ -327,6 +328,7 @@
         },
         {
           "id": "fence_panel_8x3",
+          "hiddenFromPanel": true,
           "name": "Fence Panel 8' x 3'",
           "type": "item",
           "category": "fence",
