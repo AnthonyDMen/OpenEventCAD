@@ -4,6 +4,7 @@ export function createDrawnRunNode(ctx, data, start, end) {
   const { Konva, pixelsPerFoot, runLengthFt, cloneConfig, attachShapeEvents, ensureNodeId } = ctx;
   const points = Array.isArray(start) ? start : [start, end]; const isLight = data.drawMode === 'bistro'; const color = data.color || (isLight ? '#f1c75b' : '#b98fc1');
   const node = new Konva.Group({ draggable: true, name: 'drawnRun' });
+  node.setAttr('lightRunName', String(data.lightRunName || '').trim());
   node.setAttrs({ customType: 'drawnRun', selectable: true, lockScaling: true, drawMode: data.drawMode || 'pipeDrape', inventoryName: data.inventoryName || 'Pipe & Drape Run', inventoryCategory: data.category || '', addonColor: color, runPoints: points, runLengthFt: runLengthFt(points), lightPostAnchors: isLight ? (cloneConfig(data.lightPostAnchors) || []) : [] });
   node.add(new Konva.Line({ points: points.flatMap((point) => [point.x, point.y]), stroke: color, strokeWidth: isLight ? 2 : Math.max(4, Number(data.width || .5) * pixelsPerFoot), lineCap: 'round', lineJoin: 'round', name: 'drawnRunLine' }));
   if (isLight) node.add(new Konva.Line({ points: points.flatMap((point) => [point.x, point.y]), stroke: 'rgba(0,0,0,.01)', strokeWidth: 22, lineCap: 'round', name: 'drawnRunHit' }));

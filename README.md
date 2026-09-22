@@ -6,6 +6,7 @@ Open Event CAD is an open-source, browser-based 2D event floorplanner for tents,
 
 - [User guide](docs/USER_GUIDE.md) — using the planner.
 - [Developer guide](docs/DEVELOPER_GUIDE.md) — code structure, data, and safe changes.
+- [Engine change log](docs/ENGINE_CHANGE_LOG.md) — working engine changes and their verification status.
 - [Modding guide](docs/MODDING.md) — adding content and creating custom builds.
 - [Operations](docs/OPERATIONS.md) — running, testing, and backing up the service.
 - [License](LICENSE) — MIT license for the project.

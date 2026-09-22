@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -u
+
+# Installed as engine/.git/hooks/post-push. This is intentionally a local
+# development hook: it only mirrors the vanilla engine to GitHub.
+engine_root="$(git rev-parse --show-toplevel)"
+upstream_ref="${ENGINE_UPSTREAM_REF:-main}"
+github_remote="${ENGINE_GITHUB_REMOTE:-github}"
+remote_name="${1:-}"
+
+# The nested GitHub push invokes this hook again. Skip the nested invocation
+# so it cannot mirror recursively or update the downstream twice.
+if [[ "${ENGINE_MIRROR_PUSH:-0}" == 1 ]]; then
+  exit 0
+fi
+
+main_pushed=0
+while IFS=' ' read -r _local_ref _local_sha remote_ref _remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/$upstream_ref" ]]; then
+    main_pushed=1
+  fi
+done
+
+if [[ "$main_pushed" != 1 ]]; then
+  exit 0
+fi
+
+if [[ "$remote_name" == "origin" ]] && git remote get-url "$github_remote" >/dev/null 2>&1; then
+  echo "post-push: mirroring engine $upstream_ref to GitHub"
+  if ! ENGINE_MIRROR_PUSH=1 git push "$github_remote" "HEAD:$upstream_ref"; then
+    echo "post-push: Forge push succeeded, but GitHub mirror failed." >&2
+    exit 1
+  fi
+fi

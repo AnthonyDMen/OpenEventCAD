@@ -54,6 +54,7 @@ import { customItemPlacementPayload } from '../../app/static/js/planner/features
 import { referenceSetupDisplay, referenceSetupPoint } from '../../app/static/js/planner/features/reference/canvas.js';
 import {
   stableTentSetupValue,
+  layoutGroupSetupContents,
   tentAddonSetupEntryFromAttrs,
   tentAddonUsageRowsFromRecords,
   tentDisplayNameFromSize,
@@ -376,6 +377,24 @@ test('tent setup summary helpers create stable setup and inventory records', () 
     { addonType: 'bistro', lengthFt: 26.4 },
     { addonType: 'fan', inventoryName: 'Tent Fan' },
   ]), [{ name: 'Bistro Lights', amount: 26, unit: 'ft' }, { name: 'Tent Fan', amount: 1, unit: 'count' }]);
+});
+
+test('tent signatures compare contents regardless of object or item ordering', () => {
+  const tent = { widthFt: 20, heightFt: 20 };
+  const a = [{ kind: 'table', count: 2 }, { kind: 'chair', count: 8 }];
+  const b = [{ count: 8, kind: 'chair' }, { count: 2, kind: 'table' }];
+  assert.equal(tentSetupSignatureFromAttrs(tent, [], a), tentSetupSignatureFromAttrs(tent, [], b));
+  assert.notEqual(tentSetupSignatureFromAttrs(tent, [], a), tentSetupSignatureFromAttrs(tent, [], [...a, a[0]]));
+});
+
+test('layout group inventory ignores names and placement but retains setup differences', () => {
+  const attrs = { customType: 'groupedSeating', groupedConfig: { seatingLabel: 'Guests', facing: 'up', rows: 5, cols: 8, chairName: 'Chiavari Chair' }, x: 20, rotation: 0 };
+  const original = { nodes: [{ attrs }] };
+  const renamed = { nodes: [{ attrs: { ...attrs, x: 800, rotation: 90, groupedConfig: { ...attrs.groupedConfig, seatingLabel: 'VIP', facing: 'left' } } }, { attrs: { customType: 'label', text: 'Decoration' } }] };
+  assert.deepEqual(layoutGroupSetupContents(original), layoutGroupSetupContents(renamed));
+  const different = structuredClone(original);
+  different.nodes[0].attrs.groupedConfig.cols = 9;
+  assert.notDeepEqual(layoutGroupSetupContents(original), layoutGroupSetupContents(different));
 });
 
 test('layout-group helpers validate persisted templates and replace matching IDs', () => {

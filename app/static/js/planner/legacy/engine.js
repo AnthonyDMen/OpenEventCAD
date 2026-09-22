@@ -1,4 +1,5 @@
 import { cloneConfig, normaliseFeet, normaliseNonNegativeInteger, valuesRoughlyMatch } from '../domain/value.js';
+import { installTouchControls } from '../features/touch-controls.js';
 import { escapeHtml, formatInventoryAmount, formatInventoryUsage } from '../domain/format.js';
 import { clampEndpointToSpan, pointDistanceInFeet, polylineLength } from '../domain/polyline.js';
 import {
@@ -46,6 +47,7 @@ import {
 import { bistroZigZagPointsFt, chandelierPositionsFt } from '../domain/lights.js';
 import {
   stableTentSetupValue,
+  layoutGroupSetupContents,
   tentAddonSetupEntryFromAttrs,
   tentAddonUsageRowsFromRecords,
   tentDisplayNameFromSize,
@@ -760,7 +762,9 @@ export function startLegacyPlanner() {
 
   function inferInventoryNameForNode(node) {
     const match = findInventoryDefinitionForNode(node);
-    return match && match.name ? match.name : '';
+    return match && match.name
+      ? match.name
+      : String(node && node.getAttr && (node.getAttr('inventoryName') || node.getAttr('customName') || node.getAttr('itemType') || '') || '').trim();
   }
 
   function findInventoryDefinitionForPrintName(name) {
@@ -902,8 +906,52 @@ export function startLegacyPlanner() {
   }
 
   function tentSetupSignature(tent) {
-    const addons = tentAddonsForTent(tent).map(tentAddonSetupEntry).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-    return tentSetupSignatureFromAttrs({ widthFt: tent.getAttr('widthFt') || 0, heightFt: tent.getAttr('heightFt') || 0 }, addons);
+    const addons = tentAddonsForTent(tent).map((node) => {
+      const { attachment, ...setup } = tentAddonSetupEntry(node);
+      return setup;
+    });
+    const contents = [];
+    const insideTent = (node) => tentPointIsInside(tent, tentLocalPoint(tent, getNodeCenter(node)));
+    forEachNode((node) => {
+      if (!(node && node.getAttr && insideTent(node))) return;
+      const type = node.getAttr('customType');
+      if (type === 'item') {
+        contents.push({
+          kind: 'item',
+          name: node.getAttr('isFlooring') ? (node.getAttr('floorCategory') || 'flooring') : inferInventoryNameForNode(node),
+          widthFt: node.getAttr('widthFt') || 0,
+          lengthFt: node.getAttr('lengthFt') || 0,
+          diameterFt: node.getAttr('diameterFt') || 0,
+          floorOptions: node.getAttr('isFlooring') ? cloneConfig(node.getAttr('floorOptions')) || {} : null,
+        });
+      } else if (type === 'groupedSeating') {
+        const config = cloneConfig(node.getAttr('groupedConfig')) || {};
+        delete config.seatingLabel;
+        delete config.facing;
+        if (Array.isArray(config.aisles)) {
+          config.aisles = config.aisles.map((aisle) => {
+            const { id, name, ...details } = aisle || {};
+            return details;
+          });
+        }
+        contents.push({ kind: 'groupedSeating', config });
+      } else if (type === 'pipeDrapeChain') {
+        const points = pipeDrapeWorldPoints(node);
+        contents.push({ kind: 'pipeDrape', crossbar: node.getAttr('crossbarName') || 'Crossbar', heightFt: Number(node.getAttr('heightFt')) || 10, spans: points.slice(1).map((point, index) => Math.round(pipeDrapeSpanFeet(points[index], point) * 100) / 100) });
+      } else if (type === 'fenceChain') {
+        const points = fenceWorldPoints(node);
+        contents.push({ kind: 'fence', panelLengthFt: Number(node.getAttr('fencePanelLengthFt')) || 8, spans: points.slice(1).map((point, index) => Math.round(pointDistanceInFeet(points[index], point, FEET_TO_PX) * 100) / 100) });
+      } else if (type === 'drawnRun') {
+        contents.push({ kind: 'drawnRun', drawMode: node.getAttr('drawMode') || '', lengthFt: Math.round((Number(node.getAttr('runLengthFt')) || 0) * 100) / 100 });
+      } else if (type === 'layoutGroup') {
+        contents.push({ kind: 'layoutGroup', contents: layoutGroupSetupContents(node.getAttr('layoutGroupConfig') || {}) });
+      }
+    });
+    return tentSetupSignatureFromAttrs(
+      { widthFt: tent.getAttr('widthFt') || 0, heightFt: tent.getAttr('heightFt') || 0 },
+      addons,
+      [...contents, { kind: 'addon-usage', rows: tentAddonUsageRows(tent) }],
+    );
   }
 
   function tentAddonUsageRows(tent) {
@@ -916,27 +964,36 @@ export function startLegacyPlanner() {
 
   function tentInteriorItemRows(tents) {
     const rows = new Map();
-    const add = (name, amount = 1, kind = 'item') => {
+    const add = (name, amount = 1, kind = 'item', details = []) => {
       const key = String(name || '').trim();
       if (!key) return;
-      const rowKey = `${kind}:${key}`;
-      const row = rows.get(rowKey) || { name: key, amount: 0, unit: 'count', kind };
+      const rowKey = `${kind}:${key}:${JSON.stringify(details)}`;
+      const row = rows.get(rowKey) || { name: key, amount: 0, unit: 'count', kind, details };
       row.amount += amount;
       rows.set(rowKey, row);
     };
     const groupedSeatingTitle = (node) => {
       const config = node.getAttr('groupedConfig') || {};
       const chairRows = config.layoutKind === 'chair_rows';
-      const details = chairRows ? chairRowsDetails() : tableSeatingDetails();
-      const index = details.findIndex((entry) => entry.nodes.includes(node));
-      return seatingEntryTitle(index >= 0 ? details[index] : { config }, chairRows ? 'Chair Rows' : 'Table Seating', Math.max(0, index));
+      const entries = chairRows ? chairRowsDetails() : tableSeatingDetails();
+      const index = entries.findIndex((entry) => entry.nodes.includes(node));
+      return seatingEntryTitle({ config, count: 1 }, chairRows ? 'Chair Rows' : 'Table Seating', Math.max(0, index));
     };
+    // The tent section is a compact index. Reuse the names already assigned
+    // by each dedicated key section, but do not repeat their detailed facts.
+    const pipeNames = new Map(); pipeDrapeDetails().setups.forEach((setup) => setup.chains.forEach((chain) => pipeNames.set(chain.node, setup.displayName)));
+    const fenceNames = new Map(); fenceDetails().forEach((setup) => setup.chains.forEach((chain) => fenceNames.set(chain.node, setup.displayName)));
+    const lightNames = new Map(); standaloneLightRunDetails().forEach((setup) => setup.nodes.forEach((node) => lightNames.set(node, setup.title)));
+    const flooringNames = new Map(); flooringInventoryRows().details.forEach((detail, index) => flooringNames.set(detail.node, flooringEntryTitle(detail, index)));
     const insideAnyTent = (node) => tents.some((tent) => tentPointIsInside(tent, tentLocalPoint(tent, getNodeCenter(node))));
     forEachNode((node) => {
       if (!(node && node.getAttr && insideAnyTent(node))) return;
       const type = node.getAttr('customType');
-      if (type === 'item') add(node.getAttr('isFlooring') ? (node.getAttr('floorCategory') || 'Flooring') : inferInventoryNameForNode(node));
+      if (type === 'item') add(node.getAttr('isFlooring') ? (flooringNames.get(node) || 'Flooring') : inferInventoryNameForNode(node));
       else if (type === 'groupedSeating') add(groupedSeatingTitle(node), 1, 'group');
+      else if (type === 'pipeDrapeChain') add(pipeNames.get(node) || 'Pipe & Drape', 1, 'group');
+      else if (type === 'fenceChain') add(fenceNames.get(node) || 'Fence Run', 1, 'group');
+      else if (type === 'drawnRun') add(lightNames.get(node) || (node.getAttr('drawMode') === 'bistro' ? 'Bistro Lights' : 'Light Run'), 1, 'group');
       else if (type === 'layoutGroup') add(node.getAttr('layoutGroupName') || 'Layout group', 1, 'group');
     });
     return Array.from(rows.values()).sort((a, b) => a.name.localeCompare(b.name));
@@ -956,19 +1013,26 @@ export function startLegacyPlanner() {
       const size = tentDisplayName(a.tents[0]).localeCompare(tentDisplayName(b.tents[0]));
       return size || a.customName.localeCompare(b.customName) || a.signature.localeCompare(b.signature);
     });
-    const nextBySize = new Map();
+    const setupCountBySize = new Map();
     setups.forEach((setup) => {
       const baseTentName = tentDisplayName(setup.tents[0]);
-      const hasAddons = setup.addons.length > 0;
+      setupCountBySize.set(baseTentName, (setupCountBySize.get(baseTentName) || 0) + 1);
+    });
+    let unnamedSetupNumber = 0;
+    setups.forEach((setup) => {
+      const baseTentName = tentDisplayName(setup.tents[0]);
       if (setup.customName) setup.displayName = setup.customName;
-      else if (hasAddons) {
-        const number = (nextBySize.get(baseTentName) || 0) + 1;
-        nextBySize.set(baseTentName, number);
-        setup.displayName = `${baseTentName} ${number}`;
-      } else setup.displayName = baseTentName;
+      else {
+        unnamedSetupNumber += 1;
+        setup.displayName = setups.filter((entry) => !entry.customName).length > 1
+          ? `Tent Setup ${unnamedSetupNumber}`
+          : 'Tent Setup';
+      }
       setup.instanceNames = setup.tents.map((tent, index) => {
         if (setup.customName) return `${setup.customName} ${index + 1}`;
-        return hasAddons ? `${setup.displayName}${String.fromCharCode(65 + index)}` : baseTentName;
+        return (setup.tents.length > 1 || (setupCountBySize.get(baseTentName) || 0) > 1)
+          ? `${setup.displayName}${String.fromCharCode(65 + index)}`
+          : baseTentName;
       });
       setup.interiorItems = tentInteriorItemRows(setup.tents);
     });
@@ -1015,10 +1079,11 @@ export function startLegacyPlanner() {
 
   function collectPipeDrapeChains() {
     const chains = [];
-    forEachNode((node) => {
+    forEachReportNode((report) => {
+      const { node } = report;
       if (!(node && node.getAttr && node.getAttr('customType') === 'pipeDrapeChain')) return;
       const points = pipeDrapeWorldPoints(node);
-      if (points.length >= 2) chains.push({ node, points, heightFt: Number(node.getAttr('heightFt')) || 10, crossbarName: node.getAttr('crossbarName') || 'Crossbar' });
+      if (points.length >= 2) chains.push({ node, report, points, heightFt: Number(node.getAttr('heightFt')) || 10, crossbarName: node.getAttr('crossbarName') || 'Crossbar' });
     });
     return chains;
   }
@@ -1294,7 +1359,7 @@ export function startLegacyPlanner() {
   function flooringInventoryRows() {
     const aggregate = new Map(); const details = [];
     const floorNodes = [];
-    forEachNode((node) => { if (!(node && node.getAttr) || !node.getAttr('isFlooring')) return; floorNodes.push(node); const detail = flooringInventoryDetails(node); if (!detail) return; details.push({ ...detail, count: 1, node, nodes: [node] }); detail.rows.forEach((row) => { const key = row.name; const current = aggregate.get(key) || { name: key, amount: 0, unit: row.unit || 'count' }; current.amount += row.amount; aggregate.set(key, current); }); });
+    forEachReportNode((report) => { const { node } = report; if (!(node && node.getAttr) || !node.getAttr('isFlooring')) return; floorNodes.push(node); const detail = flooringInventoryDetails(node); if (!detail) return; details.push({ ...detail, count: 1, node, report, nodes: [node] }); detail.rows.forEach((row) => { const key = row.name; const current = aggregate.get(key) || { name: key, amount: 0, unit: row.unit || 'count' }; current.amount += row.amount; aggregate.set(key, current); }); });
     forEachNode((node) => {
       if (!(node && node.getAttr && node.getAttr('customType') === 'stageAddon')) return;
       const parent = floorNodes.find((floor) => ensureNodeId(floor, 'floor') === node.getAttr('parentStageNodeId'));
@@ -1365,10 +1430,14 @@ export function startLegacyPlanner() {
   }
 
   function tentSetupDetailRows(setup) {
+    const tentSize = tentDisplayName(setup.tents[0]);
     return [
-      { name: 'Tents', value: setup.tents.length },
+      { name: 'Tents', value: `${setup.tents.length} × ${tentSize}` },
       ...setup.addons.map((row) => ({ name: row.name, value: formatInventoryAmount(row.amount * setup.tents.length, row.unit) })),
-      ...setup.interiorItems.map((row) => ({ name: row.name, value: row.kind === 'group' ? (row.amount === 1 ? 'Group' : `${row.amount} groups`) : formatInventoryAmount(row.amount, row.unit) })),
+      ...setup.interiorItems.flatMap((row) => [
+        { name: row.name, value: row.kind === 'group' ? (row.amount === 1 ? 'Group' : `${row.amount} groups`) : formatInventoryAmount(row.amount, row.unit) },
+        ...(row.details || []),
+      ]),
     ];
   }
 
@@ -1456,8 +1525,10 @@ export function startLegacyPlanner() {
 
   function pipeDrapeDetailRows(setup) {
     const { totalLength, groups } = pipeDrapeSetupDisplayRows(setup);
+    const heights = [...new Set((setup.chains || []).map((chain) => Number(chain.heightFt) || 10))].sort((a, b) => a - b);
     return [
       ...(totalLength ? [{ name: 'Total drape', value: formatInventoryAmount(totalLength.amount, totalLength.unit) }] : []),
+      ...(heights.length ? [{ name: 'Height', value: `${heights.join(' / ')} ft` }] : []),
       ...groups.flatMap((group) => group.rows.map((row) => ({ name: row.name.replace(/^Pipe & Drape /, ''), value: formatInventoryAmount(row.amount, row.unit) }))),
     ];
   }
@@ -1465,11 +1536,11 @@ export function startLegacyPlanner() {
   function renderPipeDrapeSummary(details) {
     if (inventoryKeyPipeDrapeSection) inventoryKeyPipeDrapeSection.style.display = details.setups.length ? '' : 'none';
     if (!inventoryKeyPipeDrape) return;
-    inventoryKeyPipeDrape.innerHTML = details.setups.map((setup) => detailGroupMarkup(setup.displayName, pipeDrapeDetailRows(setup), `<button class="btn btn-outline-secondary btn-sm pipe-drape-rename" type="button" data-setup-id="${escapeHtml(setup.id)}" title="Rename"><i class="fa-solid fa-pen"></i></button>`)).join('');
+    inventoryKeyPipeDrape.innerHTML = details.setups.map((setup) => detailGroupMarkup(setup.displayName, pipeDrapeDetailRows(setup), setup.chains.some((chain) => chain.report?.layoutGroup) ? '' : `<button class="btn btn-outline-secondary btn-sm pipe-drape-rename" type="button" data-setup-id="${escapeHtml(setup.id)}" title="Rename"><i class="fa-solid fa-pen"></i></button>`)).join('');
     inventoryKeyPipeDrape.querySelectorAll('.pipe-drape-rename').forEach((button) => button.addEventListener('click', () => {
       const setupId = button.dataset.setupId || ''; const current = details.setups.find((setup) => setup.id === setupId); if (!current) return;
       const next = window.prompt('Pipe & Drape name', current.displayName); if (next === null) return;
-      current.chains.forEach((chain) => chain.node.setAttr('pipeDrapeSetupName', next.trim())); refreshInventoryPanelUI(); setDirty(true);
+      current.chains.forEach((chain) => setReportNodeAttr(chain.report, 'pipeDrapeSetupName', next.trim())); refreshInventoryPanelUI(); setDirty(true);
     }));
   }
 
@@ -1479,11 +1550,11 @@ export function startLegacyPlanner() {
   function renderFenceRunSummary(setups) {
     if (inventoryKeyFenceRunsSection) inventoryKeyFenceRunsSection.style.display = setups.length ? '' : 'none';
     if (!inventoryKeyFenceRuns) return;
-    inventoryKeyFenceRuns.innerHTML = setups.map((setup) => detailGroupMarkup(setup.displayName, fenceRunDetailRows(setup), `<button class="btn btn-outline-secondary btn-sm fence-run-rename" type="button" data-setup-id="${escapeHtml(setup.id)}" title="Rename"><i class="fa-solid fa-pen"></i></button>`)).join('');
+    inventoryKeyFenceRuns.innerHTML = setups.map((setup) => detailGroupMarkup(setup.displayName, fenceRunDetailRows(setup), setup.chains.some((chain) => chain.report?.layoutGroup) ? '' : `<button class="btn btn-outline-secondary btn-sm fence-run-rename" type="button" data-setup-id="${escapeHtml(setup.id)}" title="Rename"><i class="fa-solid fa-pen"></i></button>`)).join('');
     inventoryKeyFenceRuns.querySelectorAll('.fence-run-rename').forEach((button) => button.addEventListener('click', () => {
       const setup = setups.find((entry) => entry.id === button.dataset.setupId); if (!setup) return;
       const name = window.prompt('Fence run name', setup.displayName); if (name === null) return;
-      setup.chains.forEach((chain) => chain.node.setAttr('fenceSetupName', name.trim()));
+      setup.chains.forEach((chain) => setReportNodeAttr(chain.report, 'fenceSetupName', name.trim()));
       refreshInventoryPanelUI(); setDirty(true);
     }));
   }
@@ -1496,26 +1567,29 @@ export function startLegacyPlanner() {
 
   function standaloneLightRunDetails() {
     const runs = [];
-    forEachNode((node) => { if (node && node.getAttr && node.getAttr('customType') === 'drawnRun' && node.getAttr('drawMode') === 'bistro') runs.push(node); });
+    forEachReportNode((report) => { const { node } = report; if (node && node.getAttr && node.getAttr('customType') === 'drawnRun' && node.getAttr('drawMode') === 'bistro') runs.push(report); });
     const pointsFor = (node) => bistroRunWorldPoints(node);
     const posts = [];
-    forEachNode((node) => {
+    forEachReportNode(({ node }) => {
       if (isLightPost(node)) posts.push({ node, point: lightPostCenter(node) });
     });
     const groups = [];
-    runs.forEach((node) => {
+    runs.forEach((report) => {
+      const { node } = report;
       const points = pointsFor(node); const connected = groups.filter((candidate) => candidate.points.some((a) => points.some((b) => Math.hypot(a.x - b.x, a.y - b.y) <= FEET_TO_PX))); let group = connected.shift();
       if (!group) { group = { runs: [], points: [] }; groups.push(group); }
-      group.runs.push(node); group.points.push(...points);
+      group.runs.push(report); group.points.push(...points);
       connected.forEach((other) => { group.runs.push(...other.runs); group.points.push(...other.points); groups.splice(groups.indexOf(other), 1); });
     });
     groups.forEach((group) => {
-      const anchoredPostIds = new Set(group.runs.flatMap((run) => normalizedLightPostAnchors(run).map((anchor) => anchor.nodeId)).filter((nodeId) => isLightPost(getNodeById(nodeId))));
+      const anchoredPostIds = new Set(group.runs.flatMap((run) => normalizedLightPostAnchors(run.node).map((anchor) => anchor.nodeId)).filter((nodeId) => isLightPost(getNodeById(nodeId))));
       group.posts = anchoredPostIds.size || posts.filter((post) => group.points.some((point) => Math.hypot(point.x - post.point.x, point.y - post.point.y) <= FEET_TO_PX)).length;
-      group.length = group.runs.reduce((total, node) => total + (Number(node.getAttr('runLengthFt')) || 0), 0);
+      group.length = group.runs.reduce((total, run) => total + (Number(run.node.getAttr('runLengthFt')) || 0), 0);
     });
     return groups.map((group, index) => ({
-      title: `Light Run ${index + 1}`,
+      reports: group.runs,
+      nodes: group.runs.map((run) => run.node),
+      title: [...new Set(group.runs.map((run) => String(run.node.getAttr('lightRunName') || '').trim()).filter(Boolean))].join(' / ') || `Light Run ${index + 1}`,
       rows: [
         { name: 'Run length', value: formatInventoryAmount(Math.round(group.length), 'ft') },
         { name: 'Bases', value: group.posts },
@@ -1528,7 +1602,14 @@ export function startLegacyPlanner() {
     const details = standaloneLightRunDetails();
     if (inventoryKeyLightRunsSection) inventoryKeyLightRunsSection.style.display = details.length ? '' : 'none';
     if (!inventoryKeyLightRuns) return;
-    inventoryKeyLightRuns.innerHTML = details.map((detail) => detailGroupMarkup(detail.title, detail.rows)).join('');
+    inventoryKeyLightRuns.innerHTML = details.map((detail, index) => detailGroupMarkup(detail.title, detail.rows, detail.reports.some((report) => report?.layoutGroup) ? '' : `<button class="btn btn-outline-secondary btn-sm light-run-rename" type="button" data-run-index="${index}" title="Rename light run"><i class="fa-solid fa-pen"></i></button>`)).join('');
+    inventoryKeyLightRuns.querySelectorAll('.light-run-rename').forEach((button) => button.addEventListener('click', () => {
+      const detail = details[Number(button.dataset.runIndex)];
+      const name = window.prompt('Light run name (leave blank for automatic name)', detail.nodes[0].getAttr('lightRunName') || '');
+      if (name === null) return;
+      detail.reports.forEach((report) => setReportNodeAttr(report, 'lightRunName', name.trim()));
+      refreshInventoryPanelUI(); setDirty(true);
+    }));
   }
 
   function renderPrintLightRunsSummary() {
@@ -1633,11 +1714,14 @@ export function startLegacyPlanner() {
       const width = Number(detail.node && detail.node.getAttr && detail.node.getAttr('widthFt')) || 1;
       const length = Number(detail.node && detail.node.getAttr && detail.node.getAttr('lengthFt')) || 1;
       const formatDimension = (value) => String(Math.round(value * 100) / 100);
-      return [{ name: 'Size', value: `${formatDimension(width)} × ${formatDimension(length)} ft` }, ...detail.rows.map((row) => ({ name: row.name, value: formatInventoryUsage(row.name, row.amount, row.unit || 'count') }))];
+      const category = detail.node.getAttr('floorCategory') || detail.node.getAttr('itemType');
+      const options = detail.node.getAttr('floorOptions') || {};
+      const type = { stage: 'Stage', subfloor: 'Subfloor', modernDancefloor: 'Modern dance floor', classicDancefloor: 'Classic dance floor', dancefloor: options.style === 'classic' ? 'Classic dance floor' : 'Modern dance floor' }[category] || 'Flooring';
+      return [{ name: 'Type', value: type }, { name: 'Size', value: `${formatDimension(width)} × ${formatDimension(length)} ft` }, ...detail.rows.map((row) => ({ name: row.name, value: formatInventoryUsage(row.name, row.amount, row.unit || 'count') }))];
     };
     if (inventoryKeyFlooringSection) inventoryKeyFlooringSection.style.display = details.length ? '' : 'none';
     if (inventoryKeyFlooring) {
-      inventoryKeyFlooring.innerHTML = details.map((detail, index) => detailGroupMarkup(flooringEntryTitle(detail, index), detailRows(detail), `<button class="btn btn-outline-secondary btn-sm flooring-summary-edit" type="button" data-flooring-index="${index}" title="Edit flooring"><i class="fa-solid fa-pen"></i></button>`)).join('');
+      inventoryKeyFlooring.innerHTML = details.map((detail, index) => detailGroupMarkup(flooringEntryTitle(detail, index), detailRows(detail), detail.report?.layoutGroup ? '' : `<button class="btn btn-outline-secondary btn-sm flooring-summary-edit" type="button" data-flooring-index="${index}" title="Edit flooring"><i class="fa-solid fa-pen"></i></button>`)).join('');
       inventoryKeyFlooring.querySelectorAll('.flooring-summary-edit').forEach((button) => button.addEventListener('click', () => editFlooringGroup(details[Number(button.dataset.flooringIndex)]?.node)));
     }
     if (!printFlooringSummaryEl) return;
@@ -1648,13 +1732,15 @@ export function startLegacyPlanner() {
 
   function chairRowsDetails() {
     const details = [];
-    forEachNode((node) => {
+    forEachReportNode((report) => {
+      const { node } = report;
       if (!(node && node.getAttr && node.getAttr('customType') === 'groupedSeating' && node.getAttr('groupedLayoutKind') === 'chair_rows')) return;
       const config = node.getAttr('groupedConfig') || {};
       const chairs = Number(config.chairCount) || Math.max(1, parseInt(config.rows, 10) || 1) * Math.max(1, parseInt(config.cols, 10) || 1);
-      details.push({ config, count: 1, chairs, nodes: [node] });
+      details.push({ config, count: 1, chairs, nodes: [node], report });
     });
-    return groupChairRowConfigs(details.map((entry) => entry.config), details.map((entry) => entry.nodes[0]));
+    const reports = new Map(details.map((entry) => [entry.nodes[0], entry.report]));
+    return groupChairRowConfigs(details.map((entry) => entry.config), details.map((entry) => entry.nodes[0])).map((entry) => ({ ...entry, reports: entry.nodes.map((node) => reports.get(node)) }));
   }
 
   function seatingAisleDirection(aisle) {
@@ -1668,7 +1754,29 @@ export function startLegacyPlanner() {
 
   function seatingEntryTitle(entry, kind, index) {
     const title = String(entry && entry.config && entry.config.seatingLabel || `${kind} ${index + 1}`);
-    return entry.count > 1 ? `${title} × ${entry.count}` : title;
+    return title;
+  }
+
+  function seatingDetailRows(entry, kind) {
+    const c = entry.config || {};
+    const count = entry.count || 1;
+    const chairRows = kind === 'Chair Rows';
+    const chairs = chairRows ? (Number(c.chairCount) || Math.max(1, Number(c.rows) || 1) * Math.max(1, Number(c.cols) || 1)) : (Number(c.chairCount) || 0);
+    return [
+      ...(count > 1 ? [{ name: 'Groups', value: count }] : []),
+      ...(!chairRows ? [{ name: 'Table', value: c.tableName || 'Table' }] : []),
+      { name: 'Chair type', value: seatingChairTypeName(c.effectiveChairName || c.chairName) },
+      { name: 'Total chairs', value: chairs * count },
+      ...(chairRows ? [
+        { name: count > 1 ? 'Rows / group' : 'Rows', value: c.rows || 1 },
+        { name: 'Chairs / row', value: c.cols || 1 },
+        ...(c.aisles || []).map((aisle, index) => ({ name: seatingAisleTitle(aisle, index), value: `${aisle.widthFt || 4} ft` })),
+      ] : [
+        ...(count > 1 ? [{ name: 'Chairs / table', value: chairs }] : []),
+        { name: 'Layout', value: c.tableChairPattern === 'across' ? 'Across' : 'Side by side' },
+        ...(c.cocktailHeightMode ? [{ name: 'Height', value: c.cocktailHeightMode === 'H' ? 'High' : 'Low' }] : []),
+      ]),
+    ];
   }
 
   function seatingChairTypeName(value) {
@@ -1696,7 +1804,8 @@ export function startLegacyPlanner() {
 
   function seatingKeyDetailMarkup(entry, kind, index, rows) {
     const kindKey = kind === 'Table Seating' ? 'table' : 'chair';
-    return detailGroupMarkup(seatingEntryTitle(entry, kind, index), rows, `<button class="btn btn-outline-secondary btn-sm seating-summary-rename" type="button" data-seating-kind="${kindKey}" data-seating-index="${index}" title="Edit seating"><i class="fa-solid fa-pen"></i></button>`);
+    const grouped = (entry.reports || []).some((report) => report?.layoutGroup);
+    return detailGroupMarkup(seatingEntryTitle(entry, kind, index), rows, grouped ? '' : `<button class="btn btn-outline-secondary btn-sm seating-summary-rename" type="button" data-seating-kind="${kindKey}" data-seating-index="${index}" title="Edit seating"><i class="fa-solid fa-pen"></i></button>`);
   }
 
   function renderChairRowsSummary() {
@@ -1704,9 +1813,7 @@ export function startLegacyPlanner() {
     if (inventoryKeySeatingSection) inventoryKeySeatingSection.style.display = details.length ? '' : 'none';
     if (!inventoryKeySeating) return;
     inventoryKeySeating.innerHTML = details.map((entry, index) => {
-      const config = entry.config;
-      const aisles = Array.isArray(config.aisles) ? config.aisles : [];
-      const rows = [{ name: 'Type', value: seatingChairTypeName(config.chairName) }, { name: 'Total', value: entry.chairs }, { name: 'Rows', value: config.rows || 1 }, { name: 'Chairs per Row', value: config.cols || 1 }, ...aisles.map((aisle, aisleIndex) => ({ name: seatingAisleTitle(aisle, aisleIndex), value: `${aisle.widthFt || 4} ft` }))];
+      const rows = seatingDetailRows(entry, 'Chair Rows');
       return seatingKeyDetailMarkup(entry, 'Chair Rows', index, rows);
     }).join('');
     inventoryKeySeating.querySelectorAll('.seating-summary-rename').forEach((button) => button.addEventListener('click', () => renameSeatingEntry(details[Number(button.dataset.seatingIndex)], 'Chair Rows', Number(button.dataset.seatingIndex))));
@@ -1714,11 +1821,13 @@ export function startLegacyPlanner() {
 
   function tableSeatingDetails() {
     const details = [];
-    forEachNode((node) => {
+    forEachReportNode((report) => {
+      const { node } = report;
       if (!(node && node.getAttr && node.getAttr('customType') === 'groupedSeating' && node.getAttr('groupedLayoutKind') === 'table_seating')) return;
-      details.push({ config: node.getAttr('groupedConfig') || {}, count: 1, nodes: [node] });
+      details.push({ config: node.getAttr('groupedConfig') || {}, count: 1, nodes: [node], report });
     });
-    return groupTableSeatingConfigs(details.map((entry) => entry.config), details.map((entry) => entry.nodes[0]));
+    const reports = new Map(details.map((entry) => [entry.nodes[0], entry.report]));
+    return groupTableSeatingConfigs(details.map((entry) => entry.config), details.map((entry) => entry.nodes[0])).map((entry) => ({ ...entry, reports: entry.nodes.map((node) => reports.get(node)) }));
   }
 
   function renderTableSeatingSummary() {
@@ -1727,8 +1836,7 @@ export function startLegacyPlanner() {
     if (details.length) {
       inventoryKeySeatingSection.style.display = '';
       inventoryKeySeating.insertAdjacentHTML('beforeend', details.map((entry, index) => {
-        const c = entry.config;
-        const rows = [{ name: 'Table', value: c.tableName || 'Table' }, { name: 'Type', value: seatingChairTypeName(c.effectiveChairName || c.chairName) }, { name: 'Total', value: Number(c.chairCount) || 0 }, ...(c.cocktailHeightMode ? [{ name: 'Height', value: c.cocktailHeightMode === 'H' ? 'High' : 'Low' }] : [])];
+        const rows = seatingDetailRows(entry, 'Table Seating');
         return seatingKeyDetailMarkup(entry, 'Table Seating', index, rows);
       }).join(''));
       inventoryKeySeating.querySelectorAll('.seating-summary-rename[data-seating-kind="table"]').forEach((button) => { const index = Number(button.dataset.seatingIndex); button.addEventListener('click', () => renameSeatingEntry(details[index], 'Table Seating', index)); });
@@ -1740,9 +1848,11 @@ export function startLegacyPlanner() {
     const details = chairRowsDetails(); const tableDetails = tableSeatingDetails();
     if (!seatingShowOnPrint || (!details.length && !tableDetails.length)) { printSeatingSummaryEl.style.display = 'none'; printSeatingSummaryEl.innerHTML = ''; return; }
     printSeatingSummaryEl.style.display = 'block';
-    const chairMarkup = details.map((entry, index) => { const c = entry.config; const aisles = Array.isArray(c.aisles) ? c.aisles : []; const aisleMarkup = aisles.map((a, aisleIndex) => `<tr><td>${escapeHtml(seatingAisleTitle(a, aisleIndex))}</td><td>${escapeHtml(String(a.widthFt || 4))} ft</td></tr>`).join(''); return `<tr class="print-seating-group-title"><th colspan="2">${escapeHtml(seatingEntryTitle(entry, 'Chair Rows', index))}</th></tr><tr><td>Type</td><td>${escapeHtml(seatingChairTypeName(c.chairName))}</td></tr><tr><td>Total</td><td>${entry.chairs}</td></tr><tr><td>Rows</td><td>${c.rows || 1}</td></tr><tr><td>Chairs per Row</td><td>${c.cols || 1}</td></tr>${aisleMarkup}`; }).join('');
-    const tableMarkup = tableDetails.map((entry, index) => { const c = entry.config; return `<tr class="print-seating-group-title"><th colspan="2">${escapeHtml(seatingEntryTitle(entry, 'Table Seating', index))}</th></tr><tr><td>Table</td><td>${escapeHtml(c.tableName || 'Table')}</td></tr><tr><td>Type</td><td>${escapeHtml(seatingChairTypeName(c.effectiveChairName || c.chairName))}</td></tr><tr><td>Total</td><td>${Number(c.chairCount) || 0}</td></tr>${c.cocktailHeightMode ? `<tr><td>Height</td><td>${c.cocktailHeightMode === 'H' ? 'High' : 'Low'}</td></tr>` : ''}`; }).join('');
-    printSeatingSummaryEl.innerHTML = `<div class="print-inventory-summary-title">Seating</div><table class="print-workspace-key-table print-seating-key-table"><tbody>${chairMarkup}${tableMarkup}</tbody></table>`;
+    const groups = [
+      ...details.map((entry, index) => ({ title: seatingEntryTitle(entry, 'Chair Rows', index), rows: seatingDetailRows(entry, 'Chair Rows') })),
+      ...tableDetails.map((entry, index) => ({ title: seatingEntryTitle(entry, 'Table Seating', index), rows: seatingDetailRows(entry, 'Table Seating') })),
+    ];
+    printSeatingSummaryEl.innerHTML = `<div class="print-inventory-summary-title">Seating</div>${printDetailTableMarkup(groups, 'print-seating-key-table')}`;
   }
 
   function renderPrintPipeDrapeSummary(details) {
@@ -2132,6 +2242,7 @@ export function startLegacyPlanner() {
   let chairRowsConfigOverride = null;
   let chairRowsTotalLastChanged = 'rows';
   let placementRotation = 0;
+  let touchControls = null;
   let userLayers = [];
   let activeLayerId = 'items-base';
   const layerGroups = new Map();
@@ -3165,6 +3276,61 @@ export function startLegacyPlanner() {
       const group = getLayerGroup(layer.id);
       if (!group) return;
       collectionToArray(group.getChildren()).forEach((node) => callback(node, layer, group));
+    });
+  }
+
+  // Reports must include objects inside a saved layout group. Interaction code
+  // deliberately stays on the top-level object, so this is report-only.
+  function forEachReportNode(callback) {
+    forEachNode((node, layer, group) => {
+      callback({ node, layer, group, layoutGroup: null, entryIndex: -1 });
+      if (!(node && node.getAttr && node.getAttr('customType') === 'layoutGroup')) return;
+      const children = collectionToArray(node.getChildren()).filter((child) => child && child.getAttr && child.getAttr('customType'));
+      children.forEach((child, entryIndex) => callback({ node: child, layer, group, layoutGroup: node, entryIndex }));
+    });
+  }
+
+  function setReportNodeAttr(report, key, value) {
+    if (!report || !report.node) return;
+    report.node.setAttr(key, value);
+    const attrs = report.node.getAttrs ? report.node.getAttrs() : {};
+    const type = attrs.customType;
+    if (report.layoutGroup && report.entryIndex >= 0) {
+      const config = cloneConfig(report.layoutGroup.getAttr('layoutGroupConfig') || {});
+      const entries = Array.isArray(config.nodes) ? config.nodes : [];
+      let entry = entries[report.entryIndex];
+      // Konva can add helper children to a grouped layout. Match the saved
+      // record by its stable setup/run identity instead of trusting child order.
+      if (!entry || !entry.attrs || entry.attrs.customType !== type) {
+        const identity = type === 'pipeDrapeChain' ? 'pipeDrapeSetupId'
+          : type === 'fenceChain' ? 'fenceSetupId'
+            : type === 'drawnRun' ? 'lightRunName' : '';
+        entry = entries.find((candidate) => candidate?.attrs?.customType === type
+          && (!identity || candidate.attrs[identity] === attrs[identity]))
+          || entries.find((candidate) => candidate?.attrs?.customType === type)
+          || null;
+      }
+      if (entry && entry.attrs) entry.attrs[key] = cloneConfig(value);
+      report.layoutGroup.setAttr('layoutGroupConfig', config);
+    }
+    // A copied Konva group can contain its own helper children, so the child
+    // index is not a durable link after restore. Update every matching saved
+    // record as the final source of truth.
+    const identity = type === 'pipeDrapeChain' ? 'pipeDrapeSetupId'
+      : type === 'fenceChain' ? 'fenceSetupId' : '';
+    forEachNode((groupNode) => {
+      if (!(groupNode && groupNode.getAttr && groupNode.getAttr('customType') === 'layoutGroup')) return;
+      const saved = cloneConfig(groupNode.getAttr('layoutGroupConfig') || {});
+      let changed = false;
+      (saved.nodes || []).forEach((candidate) => {
+        if (candidate?.attrs?.customType !== type) return;
+        const same = identity
+          ? candidate.attrs[identity] === attrs[identity]
+          : JSON.stringify(candidate.attrs.runPoints || []) === JSON.stringify(attrs.runPoints || []);
+        if (!same) return;
+        candidate.attrs[key] = cloneConfig(value); changed = true;
+      });
+      if (changed) groupNode.setAttr('layoutGroupConfig', saved);
     });
   }
 
@@ -4554,7 +4720,7 @@ export function startLegacyPlanner() {
   // span is a fixed panel length and endpoint hardware is shared across runs.
   function isFencePlacement() { return activeTool === 'place' && placementPayload && placementPayload.kind === 'fenceChain'; }
   function fenceWorldPoints(node) { const offset = node.position(); return (cloneConfig(node.getAttr('fencePoints')) || []).map((point) => ({ x: point.x + offset.x, y: point.y + offset.y })); }
-  function collectFenceChains() { const chains = []; forEachNode((node) => { if (node && node.getAttr && node.getAttr('customType') === 'fenceChain') { const points = fenceWorldPoints(node); if (points.length >= 2) chains.push({ node, points, panelLengthFt: Number(node.getAttr('fencePanelLengthFt')) || 8 }); } }); return chains; }
+  function collectFenceChains() { const chains = []; forEachReportNode((report) => { const { node } = report; if (node && node.getAttr && node.getAttr('customType') === 'fenceChain') { const points = fenceWorldPoints(node); if (points.length >= 2) chains.push({ node, report, points, panelLengthFt: Number(node.getAttr('fencePanelLengthFt')) || 8 }); } }); return chains; }
   function fencePointKey(point) { return fenceKey(point); }
   function fenceInventoryRows(chains = collectFenceChains()) { return calculateFenceInventoryRows(chains); }
   function ensureFenceSetup(node) { let id = String(node.getAttr('fenceSetupId') || ''); if (id) return id; const order = Number(node.getAttr('fenceRunOrder')) || (++fenceSetupCounter); id = `fence-setup-${ensureNodeId(node, 'fence')}`; node.setAttrs({ fenceSetupId: id, fenceSetupOrder: order, fenceRunOrder: order }); fenceSetupCounter = Math.max(fenceSetupCounter, order); return id; }
@@ -5923,7 +6089,7 @@ export function startLegacyPlanner() {
   }
 
   function updateModeHint() {
-    return;
+    touchControls?.refresh();
   }
 
   function syncToolStateUI() {
@@ -5939,10 +6105,13 @@ export function startLegacyPlanner() {
   }
 
   function clearPlacementState() {
+    // Leaving a placement tool cancels a work-in-progress run.  Finishing is
+    // deliberate (double-click or the touch "Finish" control), never an
+    // incidental side effect of Escape, Cancel, or choosing another tool.
     clearPipeDrapeDraft();
-    if (isCustomBistroPlacement() && customBistroDraft.points.length) finishCustomBistroString();
-    resetCustomBistroDraft();
+    clearFenceDraft();
     clearDrawnRunDraft();
+    resetCustomBistroDraft();
     clearBulkLegPlacement();
     placementPayload = null;
     placementPreviewPoint = null;
@@ -6572,6 +6741,79 @@ export function startLegacyPlanner() {
     let selectionBox = null;
     let pointerPanStart = null;
     let worldPanStart = null;
+    touchControls = installTouchControls({
+      stage, world: worldGroup, layer: worldLayer, minScale: MIN_SCALE, maxScale: MAX_SCALE,
+      cancelDrag: () => {
+        selectionStart = null; selectionBox = null; selectionRect.hide();
+        pointerPanStart = null; worldPanStart = null;
+        clearBulkLegPlacement();
+        // Disabling drag also clears a pending (not-yet-moving) Konva drag
+        // without firing dragend and snapping an untouched item to the grid.
+        stage.find((node) => node.draggable?.()).forEach((node) => {
+          node.draggable(false); node.draggable(true);
+        });
+        transformer.stopTransform();
+        stage.fire('touchend', {});
+        document.body.classList.remove('is-panning');
+        stage.content.classList.remove('is-panning'); stageContainer.classList.remove('is-panning');
+      },
+      placementActive: () => usesCursorPlacementPreview() || isPipeDrapePlacement() || isFencePlacement() || isDrawnRunPlacement() || isCustomBistroPlacement(),
+      preview: (event) => updatePlacementPreview(plannerWorldPointFromDomEvent(event)),
+      place: (event) => {
+        const point = plannerWorldPointFromDomEvent(event); if (!point) return;
+        if (isPipeDrapePlacement()) handlePipeDrapePoint(point);
+        else if (isFencePlacement()) handleFencePoint(point);
+        else if (isDrawnRunPlacement()) handleDrawnRunPoint(point);
+        else if (isCustomBistroPlacement()) handleCustomBistroPoint(point);
+        else {
+          rememberPlacementPreviewPoint(point); placementTouchPreviewReady = true;
+          touchAddonPreviewActive = true; updatePlacementPreview(point);
+        }
+      },
+      actions: () => {
+        if (activeTool !== 'place') return selectedItems.length === 1
+          ? [{ id: 'edit', label: 'Edit', run: () => {
+            const node = selectedItems[0];
+            if (editDoubleClickTarget(node)) return;
+            if (node.getAttr('customType') === 'pipeDrapeChain') resumePipeDrapeChain(node);
+            else if (node.getAttr('customType') === 'fenceChain') resumeFenceChain(node);
+            else if (node.getAttr('customType') === 'drawnRun') resumeBistroLightRun(node);
+          } }]
+          : [];
+        const run = isPipeDrapePlacement() || isFencePlacement() || isDrawnRunPlacement() || isCustomBistroPlacement();
+        const point = () => placementPreviewPoint || worldGroup.getRelativePointerPosition();
+        return [
+          ...(run ? [
+            { id: 'undo-point', label: 'Undo point', run: () => {
+              if (isPipeDrapePlacement()) handlePipeDrapePoint(point(), 1, true);
+              else if (isFencePlacement()) handleFencePoint(point(), 1, true);
+              else if (isDrawnRunPlacement()) handleDrawnRunPoint(point(), 1, true);
+              else if (isCustomBistroPlacement()) handleCustomBistroPoint(point(), 1, true);
+            } },
+            { id: 'finish', label: 'Finish', run: () => {
+              let finished = false;
+              if (isPipeDrapePlacement()) finished = finishPipeDrapeChain();
+              else if (isFencePlacement()) finished = finishFenceChain();
+              else if (isDrawnRunPlacement() && drawnRunDraft.points.length >= 2) finished = handleDrawnRunPoint(point(), 2);
+              else if (isCustomBistroPlacement()) finished = finishCustomBistroString();
+              if (finished) setActiveTool('select');
+            } },
+          ] : usesCursorPlacementPreview() ? [
+            { id: 'rotate', label: 'Rotate 45°', run: () => {
+              if (placementPayload.kind === 'roomAttachment') placementPayload.swing = placementPayload.swing === 'outward' ? 'inward' : 'outward';
+              else placementRotation = (placementRotation + 45) % 360;
+              updatePlacementPreview(placementPreviewPoint);
+            } },
+            { id: 'place', label: 'Place', run: async () => {
+              if (!placementPreviewPoint) return;
+              if (usesTouchAddonPreview()) confirmTouchAddonPreview();
+              else await placeArmedObjectAtCurrentPointer(placementPreviewPoint);
+            } },
+          ] : []),
+          { id: 'cancel', label: 'Cancel', run: () => setActiveTool('select') },
+        ];
+      },
+    });
     stage.on('mousedown touchstart', (e) => {
       // ignore middle-button presses here (we use middle-button for panning via DOM handlers)
       if (e && e.evt && typeof e.evt.button !== 'undefined' && e.evt.button === 1) return;
@@ -6964,19 +7206,9 @@ export function startLegacyPlanner() {
         if (activeTool === 'ruler') {
           clearRulerMeasurement();
           setActiveTool('select');
-        } else if (placementPayload && placementPayload.kind === 'chairRowsAisle') {
+        } else if (activeTool === 'place') {
+          clearSelection();
           setActiveTool('select');
-        } else if (isPipeDrapePlacement() && pipeDrapeDraft.points.length) {
-          finishPipeDrapeChain();
-          setActiveTool('select');
-        } else if (isFencePlacement() && fenceDraft.points.length) {
-          finishFenceChain();
-          setActiveTool('select');
-        } else if (isDrawnRunPlacement() && drawnRunDraft.points.length >= 2) {
-          handleDrawnRunPoint(worldGroup.getRelativePointerPosition() || drawnRunDraft.points[drawnRunDraft.points.length - 1], 2);
-          setActiveTool('select');
-        } else if (isCustomBistroPlacement() && customBistroDraft.points.length) {
-          finishCustomBistroString();
         } else {
           clearSelection(); setActiveTool('select');
         }
@@ -7285,6 +7517,7 @@ export function startLegacyPlanner() {
           drawMode: src.getAttr('drawMode'), inventoryName: src.getAttr('inventoryName'),
           category: src.getAttr('inventoryCategory'), color: src.getAttr('addonColor'),
           lightPostAnchors: cloneConfig(src.getAttr('lightPostAnchors')) || [],
+          lightRunName: src.getAttr('lightRunName') || '',
         }, points);
       } else {
         const data = {
@@ -9949,6 +10182,7 @@ export function startLegacyPlanner() {
           inventoryName: shape.getAttr('inventoryName') || 'Run', inventoryCategory: shape.getAttr('inventoryCategory') || '',
           color: shape.getAttr('addonColor') || '', runPoints,
           lightPostAnchors: isStandaloneBistroRun(shape) ? normalizedLightPostAnchors(shape) : [],
+          lightRunName: shape.getAttr('lightRunName') || '',
           layerId: layer.id, nodeId: ensureNodeId(shape, 'drawn-run'), unit: 'ft',
         });
         return;
@@ -10365,7 +10599,7 @@ export function startLegacyPlanner() {
           } else if (it.itemKind === 'drawn_run' || it.type === 'drawnRun') {
             const points = Array.isArray(it.runPoints) ? it.runPoints : [];
             if (points.length >= 2 && targetGroup) {
-              const node = createDrawnRunNode({ drawMode: it.drawMode, inventoryName: it.inventoryName, category: it.inventoryCategory, color: it.color, lightPostAnchors: it.lightPostAnchors }, points);
+              const node = createDrawnRunNode({ drawMode: it.drawMode, inventoryName: it.inventoryName, category: it.inventoryCategory, color: it.color, lightPostAnchors: it.lightPostAnchors, lightRunName: it.lightRunName }, points);
               if (it.nodeId) node.setAttr('nodeId', it.nodeId);
               const preferredLayer = it.drawMode === 'bistro' ? 'decor-base' : layerId;
               setNodeLayerId(node, preferredLayer); (getLayerGroup(preferredLayer) || targetGroup).add(node);

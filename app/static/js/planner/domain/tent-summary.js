@@ -25,13 +25,27 @@ export function tentAddonSetupEntryFromAttrs(attrs = {}) {
   });
 }
 
-export function tentSetupSignatureFromAttrs(tentAttrs = {}, addonEntries = []) {
-  const addons = addonEntries.slice().sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+export function tentSetupSignatureFromAttrs(tentAttrs = {}, addonEntries = [], contents = []) {
+  const addons = addonEntries.map(stableTentSetupValue).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  const interior = contents.map(stableTentSetupValue).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return JSON.stringify(stableTentSetupValue({
     widthFt: tentAttrs.widthFt || 0,
     heightFt: tentAttrs.heightFt || 0,
     addons,
+    contents: interior,
   }));
+}
+
+// Compare a saved group's inventory, excluding canvas positions and labels.
+export function layoutGroupSetupContents(config = {}) {
+  return (config.nodes || []).flatMap((node) => {
+    const a = node.attrs || {};
+    if (a.customType === 'label') return [];
+    if (a.customType === 'layoutGroup') return layoutGroupSetupContents(a.layoutGroupConfig);
+    const { seatingLabel, facing, ...seating } = a.groupedConfig || {};
+    if (seating.aisles) seating.aisles = seating.aisles.map(({ id, name, ...aisle }) => aisle);
+    return [{ kind: a.customType, name: a.inventoryName || a.itemType || '', widthFt: a.widthFt, lengthFt: a.lengthFt, diameterFt: a.diameterFt, seating, floorCategory: a.floorCategory, floorOptions: a.floorOptions }];
+  }).map(stableTentSetupValue).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 }
 
 export function tentAddonUsageRowsFromRecords(records = []) {
