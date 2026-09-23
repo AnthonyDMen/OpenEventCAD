@@ -30,8 +30,11 @@ try {
   assert.match(await keyText('#inventoryKeySeating'), /Rows \/ group\s*5/);
   assert.match(await keyText('#inventoryKeyFlooring'), /Type\s*Stage/);
   assert.match(await keyText('#inventoryKeyFlooring'), /Size\s*8 × 8 ft/);
+  assert.match(await keyText('#inventoryKeyPipeDrape'), /Total run\s*8 ft/);
   assert.match(await keyText('#inventoryKeyPipeDrape'), /Height\s*10 ft/);
+  assert.match(await keyText('#inventoryKeyFenceRuns'), /Total run\s*8 ft/);
   assert.match(await keyText('#inventoryKeyFenceRuns'), /Entrance/);
+  assert.match(await keyText('#inventoryKeyLightRuns'), /Total run\s*20 ft/);
   assert.match(await keyText('#inventoryKeyLightRuns'), /Patio/);
   // Use the real edit control, including its change event and refresh path.
   await page.locator('.seating-summary-rename').first().evaluate(el => el.click());
@@ -77,7 +80,7 @@ try {
   }
   await page.locator('#printPreviewRefresh').click();
   const printed = await page.locator('#printPreview').textContent();
-  for (const text of ['VIP', 'Family', 'Reception', 'Music', 'Terrace', 'Backdrop', 'Entrance', '40x40 Tent', '8 × 8 ft', '10 ft']) assert.ok(printed.includes(text), `Print retains ${text}`);
+  for (const text of ['VIP', 'Family', 'Reception', 'Music', 'Terrace', 'Backdrop', 'Entrance', '40x40 Tent', '8 × 8 ft', '10 ft', 'Total run', '8 ft', '20 ft']) assert.ok(printed.includes(text), `Print retains ${text}`);
   assert.deepEqual(errors, []);
   console.log('All six key sections: setup facts, group totals, live rename references and print preview passed.');
 } finally { await browser.close(); }

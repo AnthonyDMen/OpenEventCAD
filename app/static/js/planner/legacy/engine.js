@@ -1527,7 +1527,7 @@ export function startLegacyPlanner() {
     const { totalLength, groups } = pipeDrapeSetupDisplayRows(setup);
     const heights = [...new Set((setup.chains || []).map((chain) => Number(chain.heightFt) || 10))].sort((a, b) => a - b);
     return [
-      ...(totalLength ? [{ name: 'Total drape', value: formatInventoryAmount(totalLength.amount, totalLength.unit) }] : []),
+      ...(totalLength ? [{ name: 'Total run', value: formatInventoryAmount(totalLength.amount, totalLength.unit) }] : []),
       ...(heights.length ? [{ name: 'Height', value: `${heights.join(' / ')} ft` }] : []),
       ...groups.flatMap((group) => group.rows.map((row) => ({ name: row.name.replace(/^Pipe & Drape /, ''), value: formatInventoryAmount(row.amount, row.unit) }))),
     ];
@@ -1545,7 +1545,11 @@ export function startLegacyPlanner() {
   }
 
   function fenceRunDetailRows(setup) {
-    return (setup.totals || []).map((row) => ({ name: row.name, value: formatInventoryAmount(row.amount, row.unit) }));
+    const totalLength = (setup.chains || []).reduce((total, chain) => total + runLengthFt(chain.points || []), 0);
+    return [
+      ...(totalLength > 0 ? [{ name: 'Total run', value: formatInventoryAmount(totalLength, 'ft') }] : []),
+      ...(setup.totals || []).map((row) => ({ name: row.name, value: formatInventoryAmount(row.amount, row.unit) })),
+    ];
   }
   function renderFenceRunSummary(setups) {
     if (inventoryKeyFenceRunsSection) inventoryKeyFenceRunsSection.style.display = setups.length ? '' : 'none';
@@ -1591,7 +1595,7 @@ export function startLegacyPlanner() {
       nodes: group.runs.map((run) => run.node),
       title: [...new Set(group.runs.map((run) => String(run.node.getAttr('lightRunName') || '').trim()).filter(Boolean))].join(' / ') || `Light Run ${index + 1}`,
       rows: [
-        { name: 'Run length', value: formatInventoryAmount(Math.round(group.length), 'ft') },
+        { name: 'Total run', value: formatInventoryAmount(group.length, 'ft') },
         { name: 'Bases', value: group.posts },
         { name: 'Poles', value: group.posts },
       ],
