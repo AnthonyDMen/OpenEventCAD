@@ -5,6 +5,26 @@ Add an entry while the change is still in the working tree, then update its
 status when it is committed, pushed, or released downstream. Keep entries
 short: what changed, why it matters, and how it was checked.
 
+## Working changes — 2026-09-28
+
+### Planner history, labels, colors, and line thickness
+
+- Placing a table with an automatic label now records one undo step for the
+  item and label together. Restoring a planner no longer erases or rewrites an
+  attached label because its catalog default differs. Undo/redo retains the
+  existing canvas nodes for objects unchanged by the action.
+- Copy/paste and saved planner snapshots retain each ordinary item's color,
+  including custom colors. Older named catalog items recover their catalog
+  color when no color was saved.
+- Labels without a saved layer ID restore to the Labels layer so copy/paste
+  can find their attachment. A manual Settings control changes floorplan line
+  thickness and remembers the browser preference.
+- Checked with the focused browser regression for copy/paste, single-step
+  undo/redo, unrelated objects, save/reload, and line thickness. Node unit,
+  Inventory Key browser, and touch browser checks passed. Python tests had
+  46 passes and one existing print-source assertion failure unrelated to
+  these changes.
+
 ## Working changes — 2026-09-22
 
 ### Touch interaction

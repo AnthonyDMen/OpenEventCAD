@@ -145,6 +145,8 @@ export function startLegacyPlanner() {
   const itemHeightsToggle = document.getElementById('itemHeightsToggle');
   const uiScaleInput = document.getElementById('uiScale');
   const uiScaleValueEl = document.getElementById('uiScaleValue');
+  const outlineThicknessInput = document.getElementById('outlineThickness');
+  const outlineThicknessValueEl = document.getElementById('outlineThicknessValue');
   const settingsMenuItem = document.getElementById('settingsMenuItem');
   const settingsPanel = document.getElementById('settingsPanel');
   const settingsCloseBtn = document.getElementById('settingsCloseBtn');
@@ -2210,6 +2212,8 @@ export function startLegacyPlanner() {
   let darkMode = false;
   let showItemHeights = false;
   let uiScale = 1;
+  let outlineThickness = 1;
+  const outlineBaseWidths = new WeakMap();
   let units = 'ft';
   let shiftPressed = false;
   let snapAnchor = null;
@@ -3835,7 +3839,10 @@ export function startLegacyPlanner() {
     if (suppressDirtyTracking) return;
     isDirty = !!nextDirty;
     renderPlannerMeta();
-    if (nextDirty) recordPlannerHistory();
+    if (nextDirty) {
+      refreshFloorplanLineThickness();
+      recordPlannerHistory();
+    }
   }
 
   function updatePlannerHistoryButtons() {
@@ -3857,11 +3864,48 @@ export function startLegacyPlanner() {
     updatePlannerHistoryButtons();
   }
 
+  async function restorePlannerHistorySnapshot(snapshot) {
+    const current = buildLayoutSnapshot();
+    const targetEntries = new Map([...snapshot.venues, ...snapshot.items].filter((entry) => entry && entry.nodeId).map((entry) => [entry.nodeId, JSON.stringify(entry)]));
+    const unchangedIds = new Set([...current.venues, ...current.items]
+      .filter((entry) => entry && entry.nodeId && targetEntries.get(entry.nodeId) === JSON.stringify(entry))
+      .map((entry) => entry.nodeId));
+    const preserved = [];
+    const selectedIds = selectedItems.map((node) => node.getAttr('nodeId'));
+    const existingNodes = [];
+    forEachNode((node) => existingNodes.push(node));
+    existingNodes.forEach((node) => {
+      if (unchangedIds.has(node.getAttr('nodeId'))) {
+        preserved.push(node);
+        node.remove();
+      }
+    });
+    try {
+      await loadLayout(cloneConfig(snapshot));
+      preserved.forEach((node) => {
+        const replacement = getNodeById(node.getAttr('nodeId'));
+        if (!replacement || !replacement.getParent()) throw new Error(`Could not restore unchanged node ${node.getAttr('nodeId')}`);
+        const parent = replacement.getParent();
+        const index = replacement.zIndex();
+        replacement.destroy();
+        parent.add(node);
+        node.zIndex(index);
+      });
+      selectedItems = selectedIds.map(getNodeById).filter(Boolean);
+      refreshLayersUI();
+      refreshInventoryPanelUI();
+      worldLayer.draw();
+    } catch (error) {
+      preserved.forEach((node) => { if (!node.getParent()) node.destroy(); });
+      throw error;
+    }
+  }
+
   async function undoPlannerAction() {
     if (plannerHistoryApplying || plannerHistory.length < 2) return;
     const current = plannerHistory.pop(); plannerRedoHistory.push(current);
     plannerHistoryApplying = true;
-    try { await loadLayout(cloneConfig(plannerHistory[plannerHistory.length - 1].snapshot)); setDirty(true); }
+    try { await restorePlannerHistorySnapshot(plannerHistory[plannerHistory.length - 1].snapshot); setDirty(true); }
     catch (error) { plannerRedoHistory.pop(); plannerHistory.push(current); await loadLayout(cloneConfig(current.snapshot)); showPlannerToast('Undo could not be restored. The current plan was retained.'); console.error(error); }
     finally { plannerHistoryApplying = false; updatePlannerHistoryButtons(); }
   }
@@ -3870,7 +3914,7 @@ export function startLegacyPlanner() {
     if (plannerHistoryApplying) return;
     const entry = plannerRedoHistory.pop(); if (!entry) return;
     plannerHistory.push(entry); plannerHistoryApplying = true;
-    try { await loadLayout(cloneConfig(entry.snapshot)); setDirty(true); }
+    try { await restorePlannerHistorySnapshot(entry.snapshot); setDirty(true); }
     catch (error) { plannerHistory.pop(); plannerRedoHistory.push(entry); await loadLayout(cloneConfig(plannerHistory[plannerHistory.length - 1].snapshot)); showPlannerToast('Redo could not be restored. The current plan was retained.'); console.error(error); }
     finally { plannerHistoryApplying = false; updatePlannerHistoryButtons(); }
   }
@@ -5306,7 +5350,7 @@ export function startLegacyPlanner() {
     refreshLabelVisibility();
     renderLayersPanel();
     worldLayer.draw();
-    setDirty(true);
+    if (options.recordHistory !== false) setDirty(true);
     return labelNode;
   }
 
@@ -5334,19 +5378,8 @@ export function startLegacyPlanner() {
       if (existingParent) {
         const meta = expectedAutomaticLabelMetaForNode(existingParent, text);
         if (meta) label.setAttrs({ ...meta, labelMode: 'attached' });
-        const definition = findInventoryDefinitionForNode(existingParent);
-        if (label.getAttr('autoGenerated') && definition && !String(definition.labelText || '').trim()) {
-          label.destroy();
-          return;
-        }
-        if (label.getAttr('autoGenerated') && definition && definition.labelText && String(definition.labelText).trim() !== String(text).trim()) {
-          const correctedText = String(definition.labelText).trim();
-          label.setAttr('labelText', correctedText);
-          const textNode = label.findOne && label.findOne('.labelText');
-          if (textNode) textNode.text(correctedText);
-          updateLabelNodeLayout(label);
-          label.setAttrs({ ...automaticLabelMeta(definition.name, correctedText), labelMode: 'attached' });
-        }
+        // An attached label is saved user-visible state. Catalog defaults can
+        // change, but loading or undoing must not erase or rewrite that state.
         return;
       }
       // Repair only a clear legacy automatic label: exact catalog text and a
@@ -7535,6 +7568,7 @@ export function startLegacyPlanner() {
           unit: 'px',
           inventoryName: src.getAttr('inventoryName') || '',
           cocktailHeightMode: src.getAttr('cocktailHeightMode') || '',
+          color: src.getAttr('itemColor') || (src.fill ? src.fill() : undefined),
           footprint: cloneConfig(src.getAttr('footprintSpec')),
         };
         clone = createItem(data);
@@ -7804,7 +7838,7 @@ export function startLegacyPlanner() {
     const widthPx = widthFt * pxPerFoot;
     const lengthPx = lengthFt * pxPerFoot;
     const diameterPx = diameterFt !== undefined ? diameterFt * pxPerFoot : 0;
-    const catalogMatch = !data.footprint && data.inventoryName
+    const catalogMatch = data.inventoryName
       ? inventoryDefinitionCache.find((entry) => entry && (entry.name === data.inventoryName || entry.aliases.includes(data.inventoryName)))
       : null;
     const inventoryName = String(data.inventoryName || '').toLowerCase();
@@ -7816,7 +7850,7 @@ export function startLegacyPlanner() {
       ? data.footprint
       : (!isRectangularSofa && catalogMatch && catalogMatch.footprint ? catalogMatch.footprint : (loungeCurveFallback || (type === 'halfround' ? { shape: 'halfround', diameterFt: diameterFt || 5, depthFt: (diameterFt || 5) / 2 } : null)));
 
-    const fill = data.color || (type === 'chair' ? '#adb5bd' : type === 'stage' ? '#ffc107' : '#20c997');
+    const fill = data.color || (catalogMatch && catalogMatch.color) || (type === 'chair' ? '#adb5bd' : type === 'stage' ? '#ffc107' : '#20c997');
     let shape;
 
     if (footprint && footprint.shape === 'custom_compound') {
@@ -8093,6 +8127,7 @@ export function startLegacyPlanner() {
       lengthFt,
       dimensionUnit: unitHint || 'ft',
       inventoryName: data.inventoryName || '',
+      itemColor: fill,
       inventoryCategory: data.category || data.inventoryCategory || '',
       familyId: data.familyId || '',
       cocktailHeightMode: data.cocktailHeightMode || '',
@@ -9997,6 +10032,35 @@ export function startLegacyPlanner() {
     }
   }
 
+  function refreshFloorplanLineThickness() {
+    const visit = (node) => {
+      const stroke = node && typeof node.stroke === 'function' ? node.stroke() : '';
+      const rgbaAlpha = typeof stroke === 'string' && stroke.match(/^rgba\([^,]+,[^,]+,[^,]+,\s*([\d.]+)\s*\)$/i);
+      if (node && typeof node.strokeWidth === 'function' && stroke && (!node.strokeEnabled || node.strokeEnabled()) && (!rgbaAlpha || Number(rgbaAlpha[1]) > .05)) {
+        const current = node.strokeWidth();
+        if (current > 0) {
+          const prior = outlineBaseWidths.get(node);
+          const base = prior && Math.abs(current - prior.base * prior.applied) < .001 ? prior.base : current;
+          if (Math.abs(current - base * outlineThickness) >= .001) node.strokeWidth(base * outlineThickness);
+          outlineBaseWidths.set(node, { base, applied: outlineThickness });
+        }
+      }
+      if (node && typeof node.getChildren === 'function') node.getChildren().forEach(visit);
+    };
+    forEachNode((node) => { if (node.getAttr('customType') !== 'referenceImage') visit(node); });
+    if (worldLayer) worldLayer.batchDraw();
+  }
+
+  function applyOutlineThickness(value, persist = true) {
+    outlineThickness = Math.max(.5, Math.min(2, Number(value) || 1));
+    if (outlineThicknessInput) outlineThicknessInput.value = String(Math.round(outlineThickness * 100));
+    if (outlineThicknessValueEl) outlineThicknessValueEl.textContent = `${Math.round(outlineThickness * 100)}%`;
+    refreshFloorplanLineThickness();
+    if (persist) {
+      try { localStorage.setItem('plannerOutlineThickness', String(outlineThickness)); } catch { }
+    }
+  }
+
   function applyStoredTheme() {
     try {
       const t = getStoredThemePreference(); if (t) darkMode = t === 'dark';
@@ -10008,6 +10072,8 @@ export function startLegacyPlanner() {
       const heights = localStorage.getItem('showItemHeights'); if (heights) showItemHeights = heights === '1';
       const storedUiScale = parseFloat(localStorage.getItem('plannerUiScale'));
       if (!isNaN(storedUiScale)) uiScale = storedUiScale;
+      const storedOutlineThickness = parseFloat(localStorage.getItem('plannerOutlineThickness'));
+      if (!isNaN(storedOutlineThickness)) outlineThickness = storedOutlineThickness;
     } catch { }
     document.body.classList.toggle('dark-mode', darkMode);
     if (darkModeToggle) darkModeToggle.checked = darkMode;
@@ -10015,6 +10081,7 @@ export function startLegacyPlanner() {
     syncSnapState();
     if (itemHeightsToggle) itemHeightsToggle.checked = showItemHeights;
     applyUiScale(uiScale, false);
+    applyOutlineThickness(outlineThickness, false);
     renderSnapDistanceValue();
   }
 
@@ -10226,6 +10293,7 @@ export function startLegacyPlanner() {
         layerId: layer.id,
         nodeId: ensureNodeId(shape, 'item'),
         inventoryName: shape.getAttr('inventoryName') || '',
+        color: shape.getAttr('itemColor') || (shape.fill ? shape.fill() : undefined),
         cocktailHeightMode: shape.getAttr('cocktailHeightMode') || '',
       };
 
@@ -10561,7 +10629,8 @@ export function startLegacyPlanner() {
           if (!it) return;
           const savedFloorCategory = it.floorCategory || it.type;
           const isSubfloor = (it.itemKind === 'floor' || it.floorCategory) && savedFloorCategory === 'subfloor';
-          const layerId = isSubfloor ? 'subfloor-base' : (it.layerId && getLayer(it.layerId) ? it.layerId : 'items-base');
+          const isLabel = it.itemKind === 'label' || it.type === 'label';
+          const layerId = isSubfloor ? 'subfloor-base' : (it.layerId && getLayer(it.layerId) ? it.layerId : (isLabel ? 'labels-base' : 'items-base'));
           const targetGroup = getLayerGroup(layerId);
           if (it.itemKind === 'referenceImage' || it.type === 'referenceImage') {
             const referenceLayerId = it.layerId && getLayer(it.layerId) ? it.layerId : 'reference-base';
@@ -10682,7 +10751,7 @@ export function startLegacyPlanner() {
         stageAddonEntries.forEach(({ it, layerId, targetGroup }) => { const parentStage = getNodeById(it.parentStageNodeId || ''); if (!parentStage || !targetGroup) return; const node = createStageAddonNode({ addonType: it.addonType, inventoryName: it.inventoryName, stageEdge: cloneConfig(it.stageEdge || null) }, parentStage, { x: it.x || parentStage.x(), y: it.y || parentStage.y() }); if (node) { if (it.nodeId) node.setAttr('nodeId', it.nodeId); setNodeLayerId(node, layerId); targetGroup.add(node); } });
       }
 
-      repairLegacyAttachedLabels();
+      if (!plannerHistoryApplying) repairLegacyAttachedLabels();
       refreshStandaloneLightConnections();
       forEachNode((node) => {
         if (node.getAttr && node.getAttr('customType') !== 'label') syncAttachedLabelsForNode(node);
@@ -10693,6 +10762,7 @@ export function startLegacyPlanner() {
       refreshLayersUI();
       refreshInventoryPanelUI();
       ensureLayerOrder();
+      refreshFloorplanLineThickness();
       worldLayer.draw();
       if (!plannerHistoryApplying) recordPlannerHistory(true);
       else { selectedItems = restoreSelection.map(getNodeById).filter(Boolean); updateTransformer(); }
@@ -11296,6 +11366,9 @@ export function startLegacyPlanner() {
     });
     if (uiScaleInput) uiScaleInput.addEventListener('input', (event) => {
       applyUiScale(Number(event.target.value) / 100);
+    });
+    if (outlineThicknessInput) outlineThicknessInput.addEventListener('input', (event) => {
+      applyOutlineThickness(Number(event.target.value) / 100);
     });
     if (settingsMenuItem) settingsMenuItem.addEventListener('click', toggleSettings);
     if (settingsCloseBtn) settingsCloseBtn.addEventListener('click', toggleSettings);
